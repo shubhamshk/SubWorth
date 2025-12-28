@@ -1,42 +1,40 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+    const { searchParams, origin } = new URL(request.url);
+    const code = searchParams.get('code');
+    // Always default to dashboard - Middleware will redirect to onboarding if needed
+    const next = searchParams.get('next') ?? '/dashboard';
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/login`);
-  }
+    if (code) {
+        const cookieStore = cookies();
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name) {
+                        return cookieStore.get(name)?.value;
+                    },
+                    set(name, value, options) {
+                        cookieStore.set({ name, value, ...options });
+                    },
+                    remove(name, options) {
+                        cookieStore.set({ name, value: '', ...options });
+                    },
+                },
+            }
+        );
 
-  const cookieStore = cookies();
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name, value, options) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name, options) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
+        if (!error) {
+            return NextResponse.redirect(`${origin}${next}`);
+        }
     }
-  );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    console.error('OAuth error:', error);
-    return NextResponse.redirect(`${origin}/login`);
-  }
-
-  return NextResponse.redirect(`${origin}${next}`);
+    // Return the user to an error page with instructions
+    return NextResponse.redirect(`${origin}/login?error=auth`);
 }

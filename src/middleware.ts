@@ -1,110 +1,117 @@
-/**
- * NEXT.JS MIDDLEWARE
- * 
- * SECURITY: Runs on every request to enforce security policies.
- * - Refreshes Supabase sessions
- * - Applies security headers (CSP, X-Frame-Options, etc.)
- * - Enforces CORS policy
- * - Protects routes based on authentication
- */
-
 import { NextResponse, type NextRequest } from 'next/server';
-import { updateSession } from '@/lib/supabase/middleware';
-import { getAllSecurityHeaders, getCORSHeaders } from '@/lib/security/headers';
-
-// Routes that require authentication
-const PROTECTED_ROUTES = [
-    '/dashboard',
-    '/settings',
-    '/profile',
-];
-
-// Routes that should redirect to dashboard if already authenticated
-const AUTH_ROUTES = [
-    '/login',
-    '/signup',
-    '/auth',
-];
-
-// API routes that need CORS headers
-const API_ROUTES = [
-    '/api/',
-];
+import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
     const { pathname, origin } = request.nextUrl;
-    const requestOrigin = request.headers.get('origin');
+    let response = NextResponse.next({
+        request: {
+            headers: request.headers,
+        },
+    });
 
-    // ==========================================================================
-    // Handle CORS preflight requests
-    // ==========================================================================
-    if (request.method === 'OPTIONS') {
-        const corsHeaders = getCORSHeaders(requestOrigin);
-
-        if (Object.keys(corsHeaders).length === 0 && requestOrigin) {
-            // Origin not in whitelist
-            return new NextResponse(null, { status: 403 });
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name) {
+                    return request.cookies.get(name)?.value;
+                },
+                set(name, value, options) {
+                    request.cookies.set({
+                        name,
+                        value,
+                        ...options,
+                    });
+                    response = NextResponse.next({
+                        request: {
+                            headers: request.headers,
+                        },
+                    });
+                    response.cookies.set({
+                        name,
+                        value,
+                        ...options,
+                    });
+                },
+                remove(name, options) {
+                    request.cookies.set({
+                        name,
+                        value: '',
+                        ...options,
+                    });
+                    response = NextResponse.next({
+                        request: {
+                            headers: request.headers,
+                        },
+                    });
+                    response.cookies.set({
+                        name,
+                        value: '',
+                        ...options,
+                    });
+                },
+            },
         }
-
-        return new NextResponse(null, {
-            status: 204,
-            headers: corsHeaders,
-        });
-    }
-
-    // ==========================================================================
-    // Refresh Supabase session
-    // ==========================================================================
-    const { response, user } = await updateSession(request);
-
-    // ==========================================================================
-    // Apply security headers
-    // ==========================================================================
-    const securityHeaders = getAllSecurityHeaders();
-    for (const [key, value] of Object.entries(securityHeaders)) {
-        response.headers.set(key, value);
-    }
-
-    // ==========================================================================
-    // Add CORS headers for API routes
-    // ==========================================================================
-    if (API_ROUTES.some((route) => pathname.startsWith(route))) {
-        const corsHeaders = getCORSHeaders(requestOrigin);
-        for (const [key, value] of Object.entries(corsHeaders)) {
-            response.headers.set(key, value);
-        }
-    }
-
-    // ==========================================================================
-    // Route protection
-    // ==========================================================================
-
-    // Check if trying to access protected route without auth
-    const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
-        pathname.startsWith(route)
     );
 
-    if (isProtectedRoute && !user) {
-        const loginUrl = new URL('/login', origin);
-        loginUrl.searchParams.set('redirect', pathname);
-        return NextResponse.redirect(loginUrl);
-    }
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
 
-    // Check if trying to access auth routes while already authenticated
-    const isAuthRoute = AUTH_ROUTES.some((route) =>
+    // ROUTES CONFIGURATION
+    const isAuthRoute = ['/login', '/signup', '/auth'].some((route) =>
         pathname.startsWith(route)
     );
+    const isProtectedRoute = ['/dashboard', '/settings', '/profile'].some((route) =>
+        pathname.startsWith(route)
+    );
+    const isOnboardingRoute = pathname.startsWith('/onboarding');
+    const isRootRoute = pathname === '/';
 
-    if (isAuthRoute && user) {
-        return NextResponse.redirect(new URL('/dashboard', origin));
+    // 1. UNAUTHENTICATED USER
+    if (!user) {
+        // Attempting to access protected routes -> Redirect to Login
+        if (isProtectedRoute || isOnboardingRoute) {
+            const loginUrl = new URL('/login', origin);
+            loginUrl.searchParams.set('redirect', pathname);
+            return NextResponse.redirect(loginUrl);
+        }
+        // Allow access to public routes (landing page, auth pages)
+        return response;
+    }
+
+    // 2. AUTHENTICATED USER - CHECK ONBOARDING STATUS
+    // Fetch profile to see if onboarding is completed
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .single();
+
+    const onboardingCompleted = profile?.onboarding_completed === true;
+
+    // 3. ONBOARDING LOGIC
+    if (onboardingCompleted) {
+        // User HAS completed onboarding
+        // - Should NOT be on /onboarding -> Redirect to /dashboard
+        // - Should NOT be on /login, /signup, / (root) -> Redirect to /dashboard
+        if (isOnboardingRoute || isAuthRoute || isRootRoute) {
+            return NextResponse.redirect(new URL('/dashboard', origin));
+        }
+    } else {
+        // User HAS NOT completed onboarding
+        // - Should NOT be on /dashboard (or other protected apps) -> Redirect to /onboarding
+        // - Should NOT be on / (root) -> Redirect to /onboarding
+        if (isProtectedRoute || isRootRoute) {
+            return NextResponse.redirect(new URL('/onboarding', origin));
+        }
+        // Allow access to /onboarding (and /login if they want to switch accounts, technically)
     }
 
     return response;
 }
 
-// ==========================================================================
-// Middleware config - run on all routes except static files
-// ==========================================================================
 export const config = {
     matcher: [
         /*
