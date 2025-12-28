@@ -177,35 +177,7 @@ export type Database = {
                     created_at?: string;
                 };
             };
-            user_subscriptions: {
-                Row: {
-                    id: string;
-                    user_id: string;
-                    platform_id: string;
-                    is_active: boolean;
-                    subscribed_at: string;
-                    created_at: string;
-                    updated_at: string;
-                };
-                Insert: {
-                    id?: string;
-                    user_id: string;
-                    platform_id: string;
-                    is_active?: boolean;
-                    subscribed_at?: string;
-                    created_at?: string;
-                    updated_at?: string;
-                };
-                Update: {
-                    id?: string;
-                    user_id?: string;
-                    platform_id?: string;
-                    is_active?: boolean;
-                    subscribed_at?: string;
-                    created_at?: string;
-                    updated_at?: string;
-                };
-            };
+
             user_verdicts: {
                 Row: {
                     id: string;
@@ -309,6 +281,98 @@ export type Database = {
                     action?: string;
                     attempted_at?: string;
                     expires_at?: string;
+                };
+            };
+            subscription_plans: {
+                Row: {
+                    id: string;
+                    name: 'FREE' | 'PRO' | 'TEAM';
+                    price_monthly: number;
+                    price_yearly: number | null;
+                    features: Json;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    name: string;
+                    price_monthly: number;
+                    price_yearly?: number | null;
+                    features?: Json;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    name?: string;
+                    price_monthly?: number;
+                    price_yearly?: number | null;
+                    features?: Json;
+                    created_at?: string;
+                };
+            };
+            user_subscriptions: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    plan_id: string;
+                    status: 'active' | 'cancelled' | 'expired';
+                    started_at: string;
+                    ends_at: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    plan_id: string;
+                    status: string;
+                    started_at?: string;
+                    ends_at?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    plan_id?: string;
+                    status?: string;
+                    started_at?: string;
+                    ends_at?: string | null;
+                    created_at?: string;
+                };
+            };
+            feature_flags: {
+                Row: {
+                    id: string;
+                    key: string;
+                    description: string | null;
+                };
+                Insert: {
+                    id?: string;
+                    key: string;
+                    description?: string | null;
+                };
+                Update: {
+                    id?: string;
+                    key?: string;
+                    description?: string | null;
+                };
+            };
+            plan_features: {
+                Row: {
+                    id: string;
+                    plan_id: string;
+                    feature_id: string;
+                    enabled: boolean;
+                };
+                Insert: {
+                    id?: string;
+                    plan_id: string;
+                    feature_id: string;
+                    enabled?: boolean;
+                };
+                Update: {
+                    id?: string;
+                    plan_id?: string;
+                    feature_id?: string;
+                    enabled?: boolean;
                 };
             };
         };

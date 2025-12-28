@@ -13,10 +13,29 @@ import {
     ChevronLeft,
     Sun,
     Moon,
-} from 'lucide-react';
-import { useTheme } from '@/providers/ThemeProvider';
-import { useStore } from '@/store/useStore';
-import AnimatedCounter from '@/components/ui/AnimatedCounter';
+import { LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { getSupabaseClient } from '@/lib/supabase/client';
+
+function LogoutButton({ collapsed }: { collapsed: boolean }) {
+    const router = useRouter();
+
+    const handleLogout = async () => {
+        const supabase = getSupabaseClient();
+        await supabase.auth.signOut();
+        router.push('/login');
+    };
+
+    return (
+        <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+        >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {!collapsed && <span className="font-medium whitespace-nowrap">Logout</span>}
+        </button>
+    );
+}
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -45,8 +64,8 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.3 }}
             className={`
-        fixed left-0 top-0 h-full bg-background-secondary border-r border-glass-border
-        flex flex-col z-40 transition-all duration-300
+        h-full bg-background-secondary border-r border-glass-border
+        flex flex-col transition-all duration-300
         ${collapsed ? 'w-20' : 'w-64'}
       `}
         >
@@ -65,7 +84,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href;
@@ -75,7 +94,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                             key={item.href}
                             href={item.href}
                             className={`
-                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
+                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
                 ${isActive
                                     ? 'bg-primary/20 text-primary border border-primary/30'
                                     : 'text-foreground-muted hover:text-foreground hover:bg-glass'
@@ -83,7 +102,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               `}
                         >
                             <Icon className="w-5 h-5 flex-shrink-0" />
-                            {!collapsed && <span className="font-medium">{item.label}</span>}
+                            {!collapsed && <span className="font-medium whitespace-nowrap">{item.label}</span>}
                         </Link>
                     );
                 })}
@@ -112,11 +131,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                     className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-foreground-muted hover:text-foreground hover:bg-glass transition-colors"
                 >
                     {theme === 'dark' ? (
-                        <Sun className="w-5 h-5" />
+                        <Sun className="w-5 h-5 flex-shrink-0" />
                     ) : (
-                        <Moon className="w-5 h-5" />
+                        <Moon className="w-5 h-5 flex-shrink-0" />
                     )}
-                    {!collapsed && <span className="font-medium">Toggle Theme</span>}
+                    {!collapsed && <span className="font-medium whitespace-nowrap">Toggle Theme</span>}
                 </button>
 
                 {/* Collapse toggle */}
@@ -125,10 +144,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                         onClick={onToggle}
                         className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-foreground-muted hover:text-foreground hover:bg-glass transition-colors"
                     >
-                        <ChevronLeft className={`w-5 h-5 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-                        {!collapsed && <span className="font-medium">Collapse</span>}
+                        <ChevronLeft className={`w-5 h-5 flex-shrink-0 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+                        {!collapsed && <span className="font-medium whitespace-nowrap">Collapse</span>}
                     </button>
                 )}
+
+                {/* Logout Button */}
+                <LogoutButton collapsed={collapsed} />
             </div>
         </motion.aside>
     );
