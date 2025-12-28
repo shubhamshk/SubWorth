@@ -61,8 +61,8 @@ export const validInterests = [
     'crime', 'family', 'musical', 'superhero', 'reality'
 ] as const;
 
-export const interestSchema = z.enum(validInterests, {
-    errorMap: () => ({ message: 'Invalid interest category' })
+export const interestSchema = z.enum([...validInterests] as [string, ...string[]], {
+    message: 'Invalid interest category'
 });
 
 export const updateInterestsSchema = z.object({
@@ -89,7 +89,7 @@ export type ToggleSubscriptionInput = z.infer<typeof toggleSubscriptionSchema>;
 
 export const notificationFrequencySchema = z.enum(
     ['daily', 'weekly', 'monthly', 'never'] as const,
-    { errorMap: () => ({ message: 'Invalid notification frequency' }) }
+    { message: 'Invalid notification frequency' }
 );
 
 export const updateNotificationSettingsSchema = z.object({
@@ -114,7 +114,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
  * OAuth provider - only Google enabled per requirements
  */
 export const oauthProviderSchema = z.enum(['google'] as const, {
-    errorMap: () => ({ message: 'Invalid OAuth provider' })
+    message: 'Invalid OAuth provider'
 });
 
 export const signInWithOAuthSchema = z.object({
@@ -158,7 +158,7 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): T {
     const result = schema.safeParse(data);
 
     if (!result.success) {
-        const errors = result.error.errors.map((e) => e.message).join(', ');
+        const errors = result.error.issues.map((e) => e.message).join(', ');
         throw new Error(`Validation failed: ${errors}`);
     }
 
@@ -177,7 +177,7 @@ export function safeValidateInput<T>(
     if (!result.success) {
         return {
             success: false,
-            errors: result.error.errors.map((e) => e.message)
+            errors: result.error.issues.map((e) => e.message)
         };
     }
 

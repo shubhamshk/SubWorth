@@ -49,7 +49,7 @@ export const getPlatforms = cache(
                 .eq('release_year', year);
 
             // Transform to frontend format
-            const transformedPlatforms: Platform[] = platforms.map((p) => ({
+            const transformedPlatforms: Platform[] = platforms.map((p: any) => ({
                 id: p.id,
                 name: p.name,
                 slug: p.slug,
@@ -61,8 +61,8 @@ export const getPlatforms = cache(
                 categories: p.categories,
                 baseScore: Number(p.base_score),
                 thisMonthContent: (releases || [])
-                    .filter((r) => r.platform_id === p.id)
-                    .map((r): Content => ({
+                    .filter((r: any) => r.platform_id === p.id)
+                    .map((r: any): Content => ({
                         id: r.id,
                         title: r.title,
                         type: r.content_type as Content['type'],
@@ -115,7 +115,7 @@ export const getMonthlyReleases = cache(
                 return { success: false, error: 'Failed to load releases' };
             }
 
-            const transformedReleases: Content[] = releases.map((r) => ({
+            const transformedReleases: Content[] = releases.map((r: any) => ({
                 id: r.id,
                 title: r.title,
                 type: r.content_type as Content['type'],
@@ -178,7 +178,7 @@ export async function getUserVerdicts(): Promise<ActionResult<PlatformScore[]>> 
         }
 
         // Transform to frontend format
-        const scores: PlatformScore[] = verdicts.map((v) => ({
+        const scores: PlatformScore[] = verdicts.map((v: any) => ({
             platformId: v.platform_id,
             totalScore: Number(v.total_score),
             verdict: v.verdict as VerdictType,
@@ -332,7 +332,7 @@ export async function getPlatformBySlug(slug: string): Promise<ActionResult<Plat
             currency: platform.currency,
             categories: platform.categories,
             baseScore: Number(platform.base_score),
-            thisMonthContent: (releases || []).map((r): Content => ({
+            thisMonthContent: (releases || []).map((r: any): Content => ({
                 id: r.id,
                 title: r.title,
                 type: r.content_type as Content['type'],

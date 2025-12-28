@@ -29,7 +29,7 @@ const CLEANUP_INTERVAL = 5 * 60 * 1000;
 if (typeof setInterval !== 'undefined') {
     setInterval(() => {
         const now = Date.now();
-        for (const [key, entry] of rateLimitStore.entries()) {
+        for (const [key, entry] of Array.from(rateLimitStore.entries())) {
             if (entry.resetAt < now) {
                 rateLimitStore.delete(key);
             }

@@ -60,7 +60,7 @@ export async function getUserInterests(): Promise<ActionResult<string[]>> {
 
         return {
             success: true,
-            data: interests.map((i) => i.interest)
+            data: interests.map((i: { interest: string }) => i.interest)
         };
     } catch (error) {
         console.error('Get interests error:', error);
@@ -112,7 +112,7 @@ export async function updateInterests(
         }
 
         // Insert new interests
-        const interestRows = validated.interests.map((interest) => ({
+        const interestRows = validated.interests.map((interest: string) => ({
             user_id: userRecord.id,
             interest
         }));
@@ -175,7 +175,7 @@ export async function getUserSubscriptions(): Promise<ActionResult<string[]>> {
 
         return {
             success: true,
-            data: subscriptions.map((s) => s.platform_id)
+            data: subscriptions.map((s: { platform_id: string }) => s.platform_id)
         };
     } catch (error) {
         console.error('Get subscriptions error:', error);

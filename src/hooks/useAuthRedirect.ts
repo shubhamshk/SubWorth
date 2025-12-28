@@ -9,10 +9,9 @@ import { useCallback } from 'react';
  */
 export function useAuthRedirect() {
     const router = useRouter();
-    const supabase = getSupabaseClient();
-
     const handleProtectedClick = useCallback(async (targetRoute: string) => {
         try {
+            const supabase = getSupabaseClient();
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session) {
@@ -29,7 +28,7 @@ export function useAuthRedirect() {
             // Fallback to login on error for safety
             router.push('/login');
         }
-    }, [router, supabase]);
+    }, [router]);
 
     return { handleProtectedClick };
 }

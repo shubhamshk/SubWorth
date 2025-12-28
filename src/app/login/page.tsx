@@ -7,12 +7,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { signInWithOAuth } from '@/app/actions/auth';
 
-export default function LoginPage() {
+function LoginForm() {
     const searchParams = useSearchParams();
     const error = searchParams.get('error');
     const redirect = searchParams.get('redirect') || '/dashboard';
@@ -52,7 +52,7 @@ export default function LoginPage() {
             >
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold mb-2">
-                        Welcome to <span className="text-gradient">OTT Manager</span>
+                        Welcome to <span className="text-gradient">SubWorth</span>
                     </h1>
                     <p className="text-foreground-muted">
                         Sign in to manage your streaming subscriptions
@@ -106,5 +106,13 @@ export default function LoginPage() {
                 </p>
             </motion.div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+            <LoginForm />
+        </Suspense>
     );
 }
