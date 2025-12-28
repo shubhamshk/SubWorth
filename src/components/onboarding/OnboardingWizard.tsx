@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import StepContentType from './StepContentType';
-import StepGenres from './StepGenres';
-import StepLanguages from './StepLanguages';
-import StepFavorites from './StepFavorites';
-import StepBehavior from './StepBehavior';
+import {
+    StepContentType,
+    StepGenres,
+    StepLanguages,
+    StepFavorites,
+    StepBehavior
+} from './';
 import { useRouter } from 'next/navigation';
 
 const STEPS = [
@@ -39,10 +41,10 @@ export default function OnboardingWizard() {
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
-                    await supabase
-                        .from('user_profiles')
+                    await (supabase
+                        .from('user_profiles') as any)
                         .update({
-                            taste_profile: profile as any
+                            taste_profile: profile
                         })
                         .eq('id', user.id);
                 }
