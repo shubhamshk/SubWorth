@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X } from 'lucide-react';
+import { Search, Plus, X, Check } from 'lucide-react';
+
 
 // Mock popular shows
 const POPULAR_SHOWS = [
