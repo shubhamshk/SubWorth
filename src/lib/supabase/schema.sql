@@ -8,6 +8,7 @@ create table if not exists user_profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   full_name text,
   avatar_url text,
+  taste_profile jsonb default '{}'::jsonb,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
