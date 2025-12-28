@@ -205,7 +205,7 @@ export async function getNotificationHistory(): Promise<ActionResult<Array<{
 
         return {
             success: true,
-            data: notifications.map((n) => ({
+            data: notifications.map((n: { notification_type: string; sent_at: string; status: string }) => ({
                 type: n.notification_type,
                 sentAt: n.sent_at,
                 status: n.status
