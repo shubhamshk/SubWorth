@@ -1,28 +1,21 @@
-# A unique ID for this project.
+# A unique ID for this project (local identifier only)
 project_id = "ott-subscription-manager"
 
 [api]
 enabled = true
-# Port to use for the API URL.
 port = 54321
-# Schemas to expose in your API. Tables, views and stored procedures in this schema will get API endpoints.
-# public and storage are included by default.
 schemas = ["public", "storage"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [db]
-# Port to use for the local database URL.
 port = 54322
-# The database major version to use.
 major_version = 15
 
 [studio]
 enabled = true
-# Port to use for Supabase Studio.
 port = 54323
 
-# Email testing interface for local development
 [inbucket]
 enabled = true
 port = 54324
@@ -31,51 +24,38 @@ pop3_port = 54326
 
 [storage]
 enabled = true
-# The maximum file size allowed (in bytes).
 file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-# The base URL of your website. Used for redirects.
 site_url = "http://localhost:3000"
-# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# SECURITY: Never use wildcards. Each redirect URL must be explicitly listed.
+
 additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
   "http://localhost:3000/dashboard"
 ]
-# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour)
+
 jwt_expiry = 3600
-# If disabled, the refresh token will never expire.
 enable_refresh_token_rotation = true
-# Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
 enable_signup = true
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
 enable_signup = true
-# If enabled, a user will be required to confirm any email change on both the old and new email addresses.
 double_confirm_changes = true
-# If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
-# SECURITY: Template-based emails only. No user-generated HTML allowed.
 
 [auth.sms]
-# Disable SMS auth - using email/OAuth only
 enable_signup = false
 enable_confirmations = false
 
-# SECURITY: Only Google OAuth enabled as per requirements
+# Google OAuth (only provider enabled)
 [auth.external.google]
 enabled = true
 client_id = "env(GOOGLE_OAUTH_CLIENT_ID)"
 secret = "env(GOOGLE_OAUTH_CLIENT_SECRET)"
-# The URL to redirect the user to after they authorize with the OAuth provider.
-redirect_uri = ""
 
-# SECURITY: All other OAuth providers explicitly disabled
+# All other OAuth providers disabled
 [auth.external.apple]
 enabled = false
 
@@ -94,21 +74,16 @@ enabled = false
 [auth.external.spotify]
 enabled = false
 
-# SECURITY: Disable anonymous sign-ins
-[auth.anonymous]
-enabled = false
-
 [analytics]
 enabled = false
 
+# Edge Runtime (NO port key — CLI v2 does not allow it)
 [edge_runtime]
 enabled = true
-# Port to use for the Edge Runtime.
-port = 54329
 
-# SECURITY: Function secrets for cron job authentication
+# Edge Functions
 [functions.recalculate-verdicts]
-verify_jwt = false # We use custom secret header verification
+verify_jwt = false
 
 [functions.send-notifications]
-verify_jwt = true # Requires valid user JWT
+verify_jwt = true

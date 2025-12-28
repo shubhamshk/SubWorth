@@ -1,17 +1,34 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, Play, Sparkles } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { useAuthRedirect } from '@/hooks/useAuthRedirect';
+import { signInWithOAuth } from '@/app/actions/auth';
 
 export default function HeroSection() {
+    const [isLoading, setIsLoading] = useState(false);
+
     const scrollToNext = () => {
         window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
     };
 
-    const { handleProtectedClick } = useAuthRedirect();
+    const handleGetStarted = async () => {
+        setIsLoading(true);
+        try {
+            const result = await signInWithOAuth({ provider: 'google' });
+            if (result.success && result.redirectUrl) {
+                window.location.href = result.redirectUrl;
+            } else {
+                console.error('OAuth error:', result.error);
+                setIsLoading(false);
+            }
+        } catch (error) {
+            console.error('Failed to start OAuth:', error);
+            setIsLoading(false);
+        }
+    };
 
     return (
         <section className="relative min-h-screen flex items-center overflow-hidden">
@@ -55,15 +72,30 @@ export default function HeroSection() {
 
                         {/* CTA Buttons */}
                         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-                            <Button size="lg" glow className="group w-full sm:w-auto" onClick={() => handleProtectedClick('/dashboard')}>
-                                <span>Check This Month's Verdict</span>
-                                <motion.span
-                                    className="ml-2"
-                                    animate={{ x: [0, 4, 0] }}
-                                    transition={{ repeat: Infinity, duration: 1.5 }}
-                                >
-                                    →
-                                </motion.span>
+                            <Button
+                                size="lg"
+                                glow
+                                className="group w-full sm:w-auto"
+                                onClick={handleGetStarted}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                                        <span>Connecting...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Get Started</span>
+                                        <motion.span
+                                            className="ml-2"
+                                            animate={{ x: [0, 4, 0] }}
+                                            transition={{ repeat: Infinity, duration: 1.5 }}
+                                        >
+                                            →
+                                        </motion.span>
+                                    </>
+                                )}
                             </Button>
                             <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                                 <Play className="w-4 h-4 mr-2" />

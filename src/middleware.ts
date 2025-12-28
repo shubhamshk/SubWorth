@@ -2,11 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
-    const { pathname, origin } = request.nextUrl;
+    const { pathname, origin, searchParams } = request.nextUrl;
+
     let response = NextResponse.next({
-        request: {
-            headers: request.headers,
-        },
+        request: { headers: request.headers },
     });
 
     const supabase = createServerClient(
@@ -18,38 +17,10 @@ export async function middleware(request: NextRequest) {
                     return request.cookies.get(name)?.value;
                 },
                 set(name, value, options) {
-                    request.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    });
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    });
-                    response.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    });
+                    response.cookies.set({ name, value, ...options });
                 },
                 remove(name, options) {
-                    request.cookies.set({
-                        name,
-                        value: '',
-                        ...options,
-                    });
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    });
-                    response.cookies.set({
-                        name,
-                        value: '',
-                        ...options,
-                    });
+                    response.cookies.set({ name, value: '', ...options });
                 },
             },
         }
@@ -59,30 +30,30 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    // ROUTES CONFIGURATION
-    const isAuthRoute = ['/login', '/signup', '/auth'].some((route) =>
-        pathname.startsWith(route)
-    );
-    const isProtectedRoute = ['/dashboard', '/settings', '/profile'].some((route) =>
-        pathname.startsWith(route)
-    );
-    const isOnboardingRoute = pathname.startsWith('/onboarding');
+    // ROUTES
     const isRootRoute = pathname === '/';
+    const isOnboardingRoute = pathname.startsWith('/onboarding');
+    const isProtectedRoute = pathname.startsWith('/dashboard');
+    const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth');
 
-    // 1. UNAUTHENTICATED USER
-    if (!user) {
-        // Attempting to access protected routes -> Redirect to Login
-        if (isProtectedRoute || isOnboardingRoute) {
-            const loginUrl = new URL('/login', origin);
-            loginUrl.searchParams.set('redirect', pathname);
-            return NextResponse.redirect(loginUrl);
-        }
-        // Allow access to public routes (landing page, auth pages)
+    // 🔑 ONE-TIME ESCAPE FLAG
+    const onboardingJustCompleted =
+        searchParams.get('onboarding') === 'complete';
+
+    // 1️⃣ LANDING PAGE → ALWAYS ALLOW
+    if (isRootRoute) {
         return response;
     }
 
-    // 2. AUTHENTICATED USER - CHECK ONBOARDING STATUS
-    // Fetch profile to see if onboarding is completed
+    // 2️⃣ NOT AUTHENTICATED
+    if (!user) {
+        if (isProtectedRoute || isOnboardingRoute) {
+            return NextResponse.redirect(new URL('/login', origin));
+        }
+        return response;
+    }
+
+    // 3️⃣ AUTHENTICATED → FETCH PROFILE
     const { data: profile } = await supabase
         .from('user_profiles')
         .select('onboarding_completed')
@@ -91,22 +62,27 @@ export async function middleware(request: NextRequest) {
 
     const onboardingCompleted = profile?.onboarding_completed === true;
 
-    // 3. ONBOARDING LOGIC
+    // 4️⃣ ROUTING LOGIC
+    // ─────────────────────────────────────
+
+    // ✅ ONBOARDING DONE
     if (onboardingCompleted) {
-        // User HAS completed onboarding
-        // - Should NOT be on /onboarding -> Redirect to /dashboard
-        // - Should NOT be on /login, /signup, / (root) -> Redirect to /dashboard
-        if (isOnboardingRoute || isAuthRoute || isRootRoute) {
+        if (isOnboardingRoute || isAuthRoute) {
             return NextResponse.redirect(new URL('/dashboard', origin));
         }
-    } else {
-        // User HAS NOT completed onboarding
-        // - Should NOT be on /dashboard (or other protected apps) -> Redirect to /onboarding
-        // - Should NOT be on / (root) -> Redirect to /onboarding
-        if (isProtectedRoute || isRootRoute) {
+        return response;
+    }
+
+    // ⛔ ONBOARDING NOT DONE
+    if (!onboardingCompleted) {
+        // Allow dashboard ONLY ONCE (escape hatch)
+        if (isProtectedRoute && onboardingJustCompleted) {
+            return response;
+        }
+
+        if (isProtectedRoute || isAuthRoute) {
             return NextResponse.redirect(new URL('/onboarding', origin));
         }
-        // Allow access to /onboarding (and /login if they want to switch accounts, technically)
     }
 
     return response;
@@ -114,13 +90,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public files (public folder)
-         */
         '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };

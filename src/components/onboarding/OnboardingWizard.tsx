@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import {
@@ -10,7 +10,8 @@ import {
     StepGenres,
     StepLanguages,
     StepFavorites,
-    StepBehavior
+    StepBehavior,
+    AIAnalysisLoader
 } from './';
 import { useRouter } from 'next/navigation';
 
@@ -22,11 +23,43 @@ const STEPS = [
     { id: 'behavior', title: 'Watch Habits' },
 ];
 
+const LOADER_STEP_DURATION = 900; // ms per step
+const TOTAL_LOADER_STEPS = 4;
+
 export default function OnboardingWizard() {
     const [currentStep, setCurrentStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showLoader, setShowLoader] = useState(false);
+    const [loaderStep, setLoaderStep] = useState(0);
     const router = useRouter();
     const { profile, updateConfidence } = useStore();
+
+    // Handle loader animation steps
+    useEffect(() => {
+        if (!showLoader) return;
+
+        // Increment steps every LOADER_STEP_DURATION
+        if (loaderStep < TOTAL_LOADER_STEPS - 1) {
+            const timer = setTimeout(() => {
+                setLoaderStep((prev) => prev + 1);
+            }, LOADER_STEP_DURATION);
+            return () => clearTimeout(timer);
+        }
+    }, [showLoader, loaderStep]);
+
+    // Handle final redirect after all steps complete
+    useEffect(() => {
+        if (!showLoader) return;
+        if (loaderStep < TOTAL_LOADER_STEPS - 1) return;
+
+        // Last step reached - redirect after one more duration
+        const timer = setTimeout(() => {
+            // Use window.location for reliable full-page navigation
+            window.location.href = '/dashboard';
+        }, LOADER_STEP_DURATION);
+
+        return () => clearTimeout(timer);
+    }, [showLoader, loaderStep]);
 
     const handleNext = async () => {
         updateConfidence(); // Recalculate confidence on every step
@@ -34,30 +67,42 @@ export default function OnboardingWizard() {
         if (currentStep < STEPS.length - 1) {
             setCurrentStep((prev) => prev + 1);
         } else {
-            // FINISH
+            // FINISH - Submit data and show loader
             setIsSubmitting(true);
+
             try {
                 const supabase = getSupabaseClient();
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
-                    await (supabase
+                    // Save taste profile and mark onboarding as completed
+                    // Using UPSERT: inserts if row doesn't exist, updates if it does
+                    const { error } = await (supabase
                         .from('user_profiles') as any)
-                        .update({
+                        .upsert({
+                            id: user.id,
                             taste_profile: profile,
-                            onboarding_completed: true
-                        })
-                        .eq('id', user.id);
+                            onboarding_completed: true,
+                            updated_at: new Date().toISOString()
+                        }, {
+                            onConflict: 'id'
+                        });
+
+                    if (error) {
+                        console.error('Supabase upsert error:', error);
+                        // Still proceed to show loader - don't block the user
+                    } else {
+                        console.log('Profile saved successfully!');
+                    }
                 }
-
-                // Simulate calculation delay for "AI Feel"
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                router.push('/dashboard');
             } catch (error) {
-                console.error('Failed to save profile', error);
-                setIsSubmitting(false);
+                console.error('Failed to save profile:', error);
+                // Still proceed to show loader - don't block the user
             }
+
+            // Always show the AI analysis loader (even if save failed)
+            // The middleware will handle proper routing
+            setShowLoader(true);
         }
     };
 
@@ -66,6 +111,11 @@ export default function OnboardingWizard() {
             setCurrentStep((prev) => prev - 1);
         }
     };
+
+    // Show loader full-screen when submitting is complete
+    if (showLoader) {
+        return <AIAnalysisLoader currentStep={loaderStep} />;
+    }
 
     return (
         <div className="min-h-screen bg-black text-foreground flex items-center justify-center p-4 relative overflow-hidden">
@@ -139,7 +189,7 @@ export default function OnboardingWizard() {
                             {isSubmitting ? (
                                 <span className="flex items-center gap-2">
                                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Calculating Verdicts...
+                                    Saving...
                                 </span>
                             ) : (
                                 <>
@@ -154,3 +204,4 @@ export default function OnboardingWizard() {
         </div>
     );
 }
+

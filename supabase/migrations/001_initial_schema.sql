@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- SECURITY: One row per authenticated user, linked to auth.users
 -- ============================================================================
 CREATE TABLE public.users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     -- SECURITY: Foreign key to Supabase Auth - ensures only authenticated users exist
     auth_id UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE public.users (
     email_notifications_enabled BOOLEAN DEFAULT true,
     notification_frequency TEXT DEFAULT 'monthly' CHECK (notification_frequency IN ('daily', 'weekly', 'monthly', 'never')),
     -- Unsubscribe token for email opt-out (SECURITY: Secure random token)
-    unsubscribe_token UUID DEFAULT uuid_generate_v4() NOT NULL,
+    unsubscribe_token UUID DEFAULT gen_random_uuid() NOT NULL,
     -- Audit columns
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -45,7 +45,7 @@ CREATE INDEX idx_users_unsubscribe_token ON public.users(unsubscribe_token);
 -- SECURITY: Admin-only write access, public read
 -- ============================================================================
 CREATE TABLE public.ott_platforms (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
     logo_url TEXT,
@@ -78,7 +78,7 @@ CREATE INDEX idx_ott_platforms_active ON public.ott_platforms(is_active) WHERE i
 -- SECURITY: Admin-only write access, public read
 -- ============================================================================
 CREATE TABLE public.monthly_releases (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     content_type TEXT NOT NULL CHECK (content_type IN ('movie', 'series', 'documentary', 'live', 'special')),
@@ -107,7 +107,7 @@ CREATE INDEX idx_monthly_releases_platform ON public.monthly_releases(platform_i
 -- SECURITY: User can only access their own interests
 -- ============================================================================
 CREATE TABLE public.user_interests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     interest TEXT NOT NULL,
     -- Audit columns
@@ -125,7 +125,7 @@ CREATE INDEX idx_user_interests_user ON public.user_interests(user_id);
 -- SECURITY: User can only access their own subscriptions
 -- ============================================================================
 CREATE TABLE public.user_subscriptions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT true NOT NULL,
@@ -148,7 +148,7 @@ CREATE INDEX idx_user_subscriptions_active ON public.user_subscriptions(user_id,
 -- SECURITY: System-generated, user can only read their own
 -- ============================================================================
 CREATE TABLE public.user_verdicts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
     -- Verdict (SECURITY: Server-calculated, never trust client)
@@ -183,7 +183,7 @@ CREATE INDEX idx_user_verdicts_period ON public.user_verdicts(verdict_year, verd
 -- SECURITY: System-managed, user can view their own
 -- ============================================================================
 CREATE TABLE public.notification_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     notification_type TEXT NOT NULL CHECK (notification_type IN ('verdict_update', 'monthly_summary', 'special_offer')),
     sent_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -203,7 +203,7 @@ CREATE INDEX idx_notification_log_user_type ON public.notification_log(user_id, 
 -- SECURITY: Used by edge functions to prevent abuse
 -- ============================================================================
 CREATE TABLE public.rate_limit_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     -- Can be user_id, IP, or other identifier
     identifier TEXT NOT NULL,
     action TEXT NOT NULL,

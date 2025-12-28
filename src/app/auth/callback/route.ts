@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+/**
+ * AUTH CALLBACK ROUTE
+ * 
+ * Purpose: Exchange OAuth code for session, then redirect.
+ * IMPORTANT: This route ONLY establishes the session.
+ * All routing decisions (onboarding vs dashboard) are handled by middleware.
+ */
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get('code');
-    // Always default to dashboard - Middleware will redirect to onboarding if needed
-    const next = searchParams.get('next') ?? '/dashboard';
 
     if (code) {
         const cookieStore = cookies();
@@ -31,10 +36,13 @@ export async function GET(request: Request) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            return NextResponse.redirect(`${origin}${next}`);
+            // Redirect to dashboard - Middleware will handle proper routing
+            // based on onboarding_completed status
+            return NextResponse.redirect(`${origin}/dashboard`);
         }
     }
 
     // Return the user to an error page with instructions
     return NextResponse.redirect(`${origin}/login?error=auth`);
 }
+
