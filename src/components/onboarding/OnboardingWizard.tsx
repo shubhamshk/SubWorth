@@ -42,7 +42,7 @@ export default function OnboardingWizard() {
                     await supabase
                         .from('user_profiles')
                         .update({
-                            taste_profile: profile
+                            taste_profile: profile as any
                         })
                         .eq('id', user.id);
                 }
