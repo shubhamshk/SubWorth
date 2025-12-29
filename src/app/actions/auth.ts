@@ -185,10 +185,11 @@ export async function getUserProfile() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
 
+        // Query the new user_profiles table which matches the middleware logic
         const { data: profile, error } = await supabase
-            .from('users')
+            .from('user_profiles')
             .select('*')
-            .eq('auth_id', user.id)
+            .eq('id', user.id) // user_profiles.id IS the auth.uid
             .single();
 
         if (error || !profile) {

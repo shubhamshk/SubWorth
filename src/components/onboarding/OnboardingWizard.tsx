@@ -6,6 +6,7 @@ import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import {
+    StepIdentity,
     StepContentType,
     StepGenres,
     StepLanguages,
@@ -16,6 +17,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 const STEPS = [
+    { id: 'identity', title: 'Welcome' },
     { id: 'content', title: 'Content Preference' },
     { id: 'genres', title: 'Your Taste' },
     { id: 'languages', title: 'Languages' },
@@ -54,8 +56,9 @@ export default function OnboardingWizard() {
 
         // Last step reached - redirect after one more duration
         const timer = setTimeout(() => {
-            // Use window.location for reliable full-page navigation
-            window.location.href = '/dashboard';
+            console.log('🎯 Redirecting to dashboard after onboarding completion');
+            // Use window.location with query param to signal completion
+            window.location.href = '/dashboard?completed=true';
         }, LOADER_STEP_DURATION);
 
         return () => clearTimeout(timer);
@@ -69,18 +72,29 @@ export default function OnboardingWizard() {
         } else {
             // FINISH - Submit data and show loader
             setIsSubmitting(true);
+            console.log('📝 Starting onboarding submission...');
 
             try {
                 const supabase = getSupabaseClient();
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
+                    console.log('👤 User ID:', user.id);
+                    console.log('📊 Profile data:', {
+                        userName: profile.userName,
+                        userAge: profile.userAge,
+                        contentTypes: profile.contentTypes,
+                        genres: profile.genres
+                    });
+
                     // Save taste profile and mark onboarding as completed
                     // Using UPSERT: inserts if row doesn't exist, updates if it does
                     const { error } = await (supabase
                         .from('user_profiles') as any)
                         .upsert({
                             id: user.id,
+                            user_name: profile.userName,
+                            user_age: profile.userAge,
                             taste_profile: profile,
                             onboarding_completed: true,
                             updated_at: new Date().toISOString()
@@ -89,15 +103,22 @@ export default function OnboardingWizard() {
                         });
 
                     if (error) {
-                        console.error('Supabase upsert error:', error);
+                        console.error('❌ Supabase upsert error:', error);
                         // Still proceed to show loader - don't block the user
                     } else {
-                        console.log('Profile saved successfully!');
+                        console.log('✅ Profile saved successfully!');
                     }
+
+                    // Increased delay to ensure database write completes
+                    console.log('⏳ Waiting for database write to complete...');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    console.log('✅ Database write should be complete');
                 }
             } catch (error) {
-                console.error('Failed to save profile:', error);
+                console.error('❌ Failed to save profile:', error);
                 // Still proceed to show loader - don't block the user
+            } finally {
+                setIsSubmitting(false);
             }
 
             // Always show the AI analysis loader (even if save failed)
@@ -155,11 +176,12 @@ export default function OnboardingWizard() {
                                 transition={{ duration: 0.3 }}
                                 className="flex-1 flex flex-col"
                             >
-                                {currentStep === 0 && <StepContentType />}
-                                {currentStep === 1 && <StepGenres />}
-                                {currentStep === 2 && <StepLanguages />}
-                                {currentStep === 3 && <StepFavorites />}
-                                {currentStep === 4 && <StepBehavior />}
+                                {currentStep === 0 && <StepIdentity />}
+                                {currentStep === 1 && <StepContentType />}
+                                {currentStep === 2 && <StepGenres />}
+                                {currentStep === 3 && <StepLanguages />}
+                                {currentStep === 4 && <StepFavorites />}
+                                {currentStep === 5 && <StepBehavior />}
                             </motion.div>
                         </AnimatePresence>
                     </div>

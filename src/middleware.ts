@@ -61,26 +61,41 @@ export async function middleware(request: NextRequest) {
         .single();
 
     const onboardingCompleted = profile?.onboarding_completed === true;
+    const justCompleted = searchParams.get('completed') === 'true';
+
+    console.log('🔐 Middleware check:', {
+        pathname,
+        userId: user.id,
+        profileExists: !!profile,
+        onboardingCompleted,
+        justCompleted,
+        isOnboardingRoute,
+        isProtectedRoute
+    });
 
     // 4️⃣ ROUTING LOGIC
     // ─────────────────────────────────────
 
-    // ✅ ONBOARDING DONE
-    if (onboardingCompleted) {
+    // ✅ ONBOARDING DONE OR JUST COMPLETED
+    if (onboardingCompleted || justCompleted) {
         if (isOnboardingRoute || isAuthRoute) {
+            console.log('✅ Onboarding complete - redirecting to dashboard');
             return NextResponse.redirect(new URL('/dashboard', origin));
         }
         return response;
     }
 
-    // ⛔ ONBOARDING NOT DONE
+    // ⛔ ONBOARDING NOT DONE (or profile doesn't exist)
     if (!onboardingCompleted) {
-        // Allow dashboard ONLY ONCE (escape hatch)
-        if (isProtectedRoute && onboardingJustCompleted) {
+        // If user is on onboarding page, allow them to stay there
+        if (isOnboardingRoute) {
+            console.log('📝 User on onboarding page - allowing access');
             return response;
         }
 
+        // Redirect protected routes and auth routes to onboarding
         if (isProtectedRoute || isAuthRoute) {
+            console.log('⚠️ Onboarding not complete - redirecting to onboarding');
             return NextResponse.redirect(new URL('/onboarding', origin));
         }
     }

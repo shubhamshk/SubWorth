@@ -23,6 +23,8 @@ export interface FavoriteShow {
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
 
 export interface TasteProfile {
+    userName: string | null;
+    userAge: number | null;
     contentTypes: ContentType[];
     genres: Genre[];
     languages: Language[];
@@ -33,6 +35,8 @@ export interface TasteProfile {
 }
 
 export const INITIAL_PROFILE: TasteProfile = {
+    userName: null,
+    userAge: null,
     contentTypes: [],
     genres: [],
     languages: [],

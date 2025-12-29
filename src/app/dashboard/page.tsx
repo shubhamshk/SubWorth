@@ -1,18 +1,61 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Sparkles } from 'lucide-react';
-import { OTTCard, Filters, SavingsTracker } from '@/components/dashboard';
+import { OTTCard, Filters, SavingsTracker, PersonalizedGreeting } from '@/components/dashboard';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import platforms from '@/data/platforms';
 import { scoreAllPlatforms, calculateTotalSavings } from '@/lib/recommendations';
 import { useStore } from '@/store/useStore';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { TasteProfile } from '@/types/onboarding';
+import { getThemeVariant, applyThemeVariant } from '@/lib/themeVariants';
 
 export default function DashboardPage() {
     const preferences = useStore((state) => state.preferences);
     const filters = useStore((state) => state.filters);
     const toggleSubscription = useStore((state) => state.toggleSubscription);
+    const [userProfile, setUserProfile] = useState<TasteProfile | null>(null);
+    const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+    // Fetch user profile from Supabase
+    useEffect(() => {
+        async function fetchUserProfile() {
+            try {
+                const supabase = getSupabaseClient();
+                const { data: { user } } = await supabase.auth.getUser();
+
+                if (user) {
+                    const { data: profile } = await supabase
+                        .from('user_profiles')
+                        .select('user_name, user_age, taste_profile')
+                        .eq('id', user.id)
+                        .single() as { data: { user_name: string | null; user_age: number | null; taste_profile: any } | null };
+
+                    if (profile && profile.taste_profile) {
+                        const tasteProfile: TasteProfile = {
+                            ...profile.taste_profile,
+                            userName: profile.user_name,
+                            userAge: profile.user_age
+                        };
+                        setUserProfile(tasteProfile);
+
+                        // Apply dynamic theme based on dominant genre
+                        const dominantGenre = tasteProfile.genres?.[0];
+                        const themeVariant = getThemeVariant(dominantGenre);
+                        applyThemeVariant(themeVariant);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+            } finally {
+                setIsLoadingProfile(false);
+            }
+        }
+
+        fetchUserProfile();
+    }, []);
 
     // Calculate scores for all platforms based on user interests
     const platformScores = useMemo(() => {
@@ -95,6 +138,11 @@ export default function DashboardPage() {
     return (
         <DashboardLayout>
             <div className="max-w-7xl mx-auto">
+                {/* Personalized Greeting */}
+                {!isLoadingProfile && userProfile && (
+                    <PersonalizedGreeting profile={userProfile} />
+                )}
+
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
@@ -105,11 +153,11 @@ export default function DashboardPage() {
                         <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                         <span className="text-xs sm:text-sm text-foreground-muted">{currentMonth}</span>
                     </div>
-                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">
                         Your OTT Verdicts
-                    </h1>
+                    </h2>
                     <p className="text-sm sm:text-base text-foreground-muted max-w-2xl">
-                        Based on your interests, here's what's worth your money this month.
+                        Based on your taste, here's what's worth your money this month.
                     </p>
                 </motion.div>
 
