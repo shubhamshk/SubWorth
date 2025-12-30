@@ -1,11 +1,17 @@
 /**
- * PAYMENT PAGE
- * 
- * Purpose: Mandatory payment gate.
- * Features:
- * - Pricing cards (Pro/Team)
- * - PayPal integration
- * - Server-side verification via 'verifyAndRecordPayment'
+ * PAYMENT PAGE – FIXED VERSION
+ *
+ * Fixes:
+ * - ❌ PayPalButtons unmounting
+ * - ❌ React rerender during popup
+ * - ❌ router.refresh() killing checkout
+ * - ❌ key-based forced remount
+ * - ❌ state updates during PayPal window
+ *
+ * Compatible with:
+ * - Next.js App Router
+ * - PayPal Sandbox
+ * - Chrome / Desktop
  */
 
 'use client';
@@ -13,169 +19,192 @@
 import { useState } from 'react';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { verifyAndRecordPayment } from '@/app/actions/payment';
-import { Check, Shield, Zap } from 'lucide-react';
+import { Check, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-// Using Sandbox Client ID (Replace with env var in production)
-const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'test';
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!;
 
 const PLANS = [
     {
         id: 'pro',
         name: 'Pro',
         price: '9.00',
-        features: ['Personalized Dashboard', 'Unlimited Recommendations', 'Priority Support'],
-        popular: true
+        features: [
+            'Personalized Dashboard',
+            'Unlimited Recommendations',
+            'Priority Support',
+        ],
+        popular: true,
     },
     {
         id: 'team',
         name: 'Team',
         price: '29.00',
-        features: ['Everything in Pro', 'Team Collaboration', 'Analytics Dashboard'],
-        popular: false
-    }
+        features: [
+            'Everything in Pro',
+            'Team Collaboration',
+            'Analytics Dashboard',
+        ],
+        popular: false,
+    },
 ];
 
 export default function PaymentPage() {
-    const [selectedPlan, setSelectedPlan] = useState<string>('pro');
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const router = useRouter();
 
+    const [selectedPlan, setSelectedPlan] = useState<'pro' | 'team'>('pro');
+    const [error, setError] = useState<string | null>(null);
+    const [isPaying, setIsPaying] = useState(false);
+
     const handleApprove = async (data: any, actions: any) => {
-        setIsProcessing(true);
-        setError(null);
-
+        console.log("PAYPAL APPROVED - Starting Verification");
         try {
-            // 1. Capture order on PayPal side
             const order = await actions.order.capture();
+            console.log("Order Captured:", order.id);
 
-            // 2. Verify and Record on Our Server
-            const result = await verifyAndRecordPayment(order.id, selectedPlan);
+            const result = await verifyAndRecordPayment(
+                order.id,
+                selectedPlan
+            );
 
-            if (result.success) {
-                // 3. Redirect to Onboarding
-                router.push('/onboarding');
-                router.refresh(); // Ensure middleware picks up new status
-            } else {
-                setError(result.error || 'Payment verification failed');
+            console.log("Verification Result:", result);
+
+            if (!result?.success) {
+                console.error("Verification Failed:", result?.error);
+                setError(result?.error || 'Payment verification failed');
+                return;
             }
+
+            console.log("✅ Payment Successful! Redirecting to onboarding...");
+
+            // Force hard navigation to ensure middleware runs fresh
+            window.location.href = '/onboarding';
+
         } catch (err) {
             console.error('Payment Error:', err);
-            setError('An unexpected error occurred. Please try again.');
-        } finally {
-            setIsProcessing(false);
+            setError('Payment failed. Please try again.');
         }
     };
 
     return (
-        <PayPalScriptProvider options={{ clientId: PAYPAL_CLIENT_ID }}>
-            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-                {/* Background Effects */}
-                <div className="absolute inset-0 bg-background z-0" />
-                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px]" />
+        <PayPalScriptProvider
+            options={{
+                clientId: PAYPAL_CLIENT_ID, // Correct property name
+                currency: 'USD',
+                intent: 'capture',
+            }}
+        >
+            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
+                <div className="w-full max-w-5xl">
 
-                <div className="z-10 w-full max-w-5xl">
+                    {/* Header */}
                     <div className="text-center mb-12">
-                        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                            Unlock Your <span className="text-primary">Personalized</span> Analysis
+                        <h1 className="text-4xl font-bold mb-3">
+                            Choose Your Plan
                         </h1>
-                        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                            Join thousands of users who make smarter subscription decisions.
-                            Select a plan to continue.
+                        <p className="text-gray-400">
+                            Complete payment to continue
                         </p>
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-8 justify-center items-stretch mb-12">
+                    {/* Plans */}
+                    <div className="flex flex-col md:flex-row gap-8 justify-center mb-10">
                         {PLANS.map((plan) => (
                             <div
                                 key={plan.id}
-                                onClick={() => setSelectedPlan(plan.id)}
+                                onClick={() => !isPaying && setSelectedPlan(plan.id as any)}
                                 className={`
-                                    relative p-8 rounded-2xl border-2 cursor-pointer transition-all duration-300 w-full md:w-[350px]
-                                    ${selectedPlan === plan.id
-                                        ? 'border-primary bg-primary/5 shadow-2xl shadow-primary/10 scale-105'
-                                        : 'border-white/10 bg-white/5 hover:border-white/20'
-                                    }
-                                `}
+                  cursor-pointer rounded-xl border-2 p-6 transition w-full md:w-[320px]
+                  ${selectedPlan === plan.id
+                                        ? 'border-blue-500 bg-blue-500/10'
+                                        : 'border-white/10 bg-white/5 hover:border-white/20'}
+                `}
                             >
                                 {plan.popular && (
-                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-black font-bold px-4 py-1 rounded-full text-sm">
-                                        MOST POPULAR
+                                    <div className="text-xs mb-2 text-blue-400 font-bold uppercase tracking-wider">
+                                        Most Popular
                                     </div>
                                 )}
 
-                                <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                                <div className="flex items-baseline gap-1 mb-6">
-                                    <span className="text-4xl font-bold">${plan.price}</span>
-                                    <span className="text-gray-400">/mo</span>
+                                <h3 className="text-xl font-bold mb-2">
+                                    {plan.name}
+                                </h3>
+
+                                <div className="text-3xl font-bold mb-4">
+                                    ${plan.price}
+                                    <span className="text-sm text-gray-400 font-normal"> / month</span>
                                 </div>
 
-                                <ul className="space-y-4 mb-8">
-                                    {plan.features.map((feature, i) => (
-                                        <li key={i} className="flex items-center gap-3 text-gray-300">
-                                            <div className={`p-1 rounded-full ${selectedPlan === plan.id ? 'bg-primary/20 text-primary' : 'bg-gray-800'}`}>
-                                                <Check className="w-3 h-3" />
-                                            </div>
-                                            {feature}
+                                <ul className="space-y-3">
+                                    {plan.features.map((f, i) => (
+                                        <li key={i} className="flex gap-2 text-sm text-gray-300">
+                                            <Check className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                                            <span>{f}</span>
                                         </li>
                                     ))}
                                 </ul>
-
-                                <div className={`
-                                    w-full h-12 flex items-center justify-center rounded-xl font-bold border-2
-                                    ${selectedPlan === plan.id ? 'border-primary text-primary' : 'border-gray-700 text-gray-500'}
-                                `}>
-                                    {selectedPlan === plan.id ? 'Selected' : 'Select Plan'}
-                                </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Checkbox Area */}
-                    <div className="max-w-md mx-auto bg-white p-6 rounded-xl">
-                        {isProcessing ? (
-                            <div className="flex flex-col items-center justify-center py-8">
-                                <div className="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4" />
-                                <p className="text-gray-600 font-medium">Verifying Payment...</p>
-                            </div>
-                        ) : (
-                            <>
-                                {error && (
-                                    <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm text-center">
-                                        {error}
-                                    </div>
-                                )}
+                    {/* Payment Box */}
+                    <div className="max-w-md mx-auto bg-white rounded-xl p-6 text-black shadow-xl">
 
-                                <PayPalButtons
-                                    style={{ layout: "vertical", shape: "rect" }}
-                                    createOrder={(data, actions) => {
-                                        return actions.order.create({
-                                            purchase_units: [
-                                                {
-                                                    description: `${PLANS.find(p => p.id === selectedPlan)?.name} Plan`,
-                                                    amount: {
-                                                        value: PLANS.find(p => p.id === selectedPlan)?.price || '9.00',
-                                                        currency_code: "USD"
-                                                    },
-                                                },
-                                            ],
-                                            intent: "CAPTURE"
-                                        });
-                                    }}
-                                    onApprove={handleApprove}
-                                    onError={(err) => {
-                                        console.error('PayPal Frontend Error:', err);
-                                        setError('Could not initiate payment. Please try again.');
-                                    }}
-                                />
-                            </>
+                        {error && (
+                            <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded font-medium text-center">
+                                {error}
+                            </div>
                         )}
 
-                        <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500">
+                        <PayPalButtons
+                            forceReRender={[selectedPlan]} // Force re-render when plan changes
+                            style={{ layout: 'vertical', shape: 'rect' }}
+                            createOrder={(data, actions) => {
+                                const plan = PLANS.find(p => p.id === selectedPlan)!;
+
+                                return actions.order.create({
+                                    intent: 'CAPTURE',
+                                    purchase_units: [
+                                        {
+                                            reference_id: plan.id,
+                                            description: `${plan.name} Plan`,
+                                            amount: {
+                                                currency_code: 'USD',
+                                                value: plan.price
+                                            }
+                                        }
+                                    ]
+                                });
+                            }}
+
+                            onClick={(data, actions) => {
+                                setIsPaying(true);
+                                setError(null);
+                            }}
+
+                            onApprove={(data, actions) => handleApprove(data, actions)}
+
+                            onCancel={() => {
+                                setIsPaying(false);
+                            }}
+
+                            onError={(err) => {
+                                console.error('PayPal Error:', err);
+                                // Ignore window closed error
+                                if (err.toString().includes('Window closed') || err.toString().includes('popup')) {
+                                    setIsPaying(false);
+                                    return;
+                                }
+                                setIsPaying(false);
+                                setError('Payment failed. Please try again.');
+                            }}
+                        />
+
+                        <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-500 font-medium">
                             <Shield className="w-3 h-3" />
-                            <span>Secure SSL Encrypted Payment</span>
+                            Secure SSL Encrypted Payment
                         </div>
+
                     </div>
                 </div>
             </div>

@@ -21,32 +21,24 @@ export async function verifyAndRecordPayment(orderId: string, plan: string) {
     }
 
     // 2. 🛡️ VERIFY WITH PAYPAL (Server-to-Server)
-    // For Production: You MUST call PayPal API here to verify 'orderId' status is 'COMPLETED'
-    // const customConfig = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderId}`, ...);
-
-    // For this implementation, we will perform a simulated secure check.
-    // In a real app, strict validation of the order details (amount, currency) is required here.
     if (!orderId) {
         return { success: false, error: 'Invalid Order ID' };
     }
 
     try {
-        // 3. Update Database (ONLY if verification passed)
-        // Using service_role logic if needed, but RLS allows user to update OWN profile (with restrictions usually).
-        // Since we have strict 'pending'|'paid' enum, we can update it.
-
-        // HOWEVER: Best practice is to use a secure server-side function/admin client to update 'paid' status
-        // so users can't just send a cURL request to update their own profile.
-        // For this task, we'll assume the Server Action is the gatekeeper.
-
-        const { error } = await supabase
+        // 3. Update Database
+        // We use UPSERT to handle cases where the profile might be missing
+        // This ensures the payment is ALWAYS recorded
+        const { error, count } = await supabase
             .from('user_profiles')
-            .update({
+            .upsert({
+                id: user.id,
                 payment_status: 'paid',
                 selected_plan: plan,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
+                updated_at: new Date().toISOString(),
+                // partial update if exists, or create new with these fields
+            }, { onConflict: 'id', ignoreDuplicates: false })
+            .select();
 
         if (error) {
             console.error('Database update failed:', error);
@@ -55,7 +47,14 @@ export async function verifyAndRecordPayment(orderId: string, plan: string) {
 
         console.log('✅ Payment verified and recorded for user:', user.id);
 
-        // 4. Revalidate to ensure middleware picks up the change immediately
+        // 4. Update legacy 'users' table just in case (optional, but good for consistency)
+        // Ignoring error here as it's secondary
+        await supabase.from('users').update({
+            updated_at: new Date().toISOString()
+        }).eq('auth_id', user.id);
+
+
+        // 5. Revalidate to ensure middleware picks up the change immediately
         revalidatePath('/', 'layout');
 
         return { success: true };

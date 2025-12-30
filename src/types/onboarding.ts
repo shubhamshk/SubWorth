@@ -15,9 +15,11 @@ export type WatchBehavior =
     | 'Watch 1-2 shows/month';
 
 export interface FavoriteShow {
-    id: string;
+    id: string; // Internal ID (can be same as tmdb_id + type)
+    tmdb_id: number;
     title: string;
-    img?: string;
+    media_type: 'movie' | 'tv';
+    poster_path: string | null;
 }
 
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
