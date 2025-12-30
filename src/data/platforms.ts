@@ -24,6 +24,7 @@ export interface Platform {
     name: string;
     slug: string;
     logo: string;
+    logoPath?: string | null;
     color: string;
     monthlyPrice: number;
     yearlyPrice?: number;

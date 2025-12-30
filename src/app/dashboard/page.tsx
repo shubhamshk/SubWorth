@@ -2,22 +2,62 @@
 
 import { useMemo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Sparkles } from 'lucide-react';
-import { OTTCard, Filters, SavingsTracker, PersonalizedGreeting } from '@/components/dashboard';
+import { Search, Settings, Filter } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import platforms from '@/data/platforms';
-import { scoreAllPlatforms, calculateTotalSavings } from '@/lib/recommendations';
+import { Platform } from '@/data/platforms';
 import { useStore } from '@/store/useStore';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { TasteProfile } from '@/types/onboarding';
 import { getThemeVariant, applyThemeVariant } from '@/lib/themeVariants';
+import PlatformSelector from '@/components/dashboard/PlatformSelector';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import InfoStrip from '@/components/dashboard/InfoStrip';
+import PlatformPreviewCard from '@/components/dashboard/PlatformPreviewCard';
+import { WatchProvider } from '@/app/actions/tmdb';
+
+// Helper to convert TMDB Provider to internal Platform shape
+const mapProviderToPlatform = (provider: WatchProvider): Platform => {
+    const knownMetadata: Record<number, Partial<Platform>> = {
+        8: { color: 'from-red-600 to-black', monthlyPrice: 15.49, currency: '$' }, // Netflix
+        119: { color: 'from-blue-500 to-cyan-400', monthlyPrice: 8.99, currency: '$' }, // Prime
+        337: { color: 'from-blue-900 to-white', monthlyPrice: 7.99, currency: '$' }, // Disney
+        15: { color: 'from-green-500 to-lime-400', monthlyPrice: 9.99, currency: '$' }, // Hulu
+        384: { color: 'from-purple-900 to-black', monthlyPrice: 9.99, currency: '$' }, // HBO Max
+    };
+
+    const meta = knownMetadata[provider.provider_id] || {
+        color: 'from-gray-700 to-gray-900',
+        monthlyPrice: 9.99,
+        currency: '$'
+    };
+
+    return {
+        id: provider.provider_id.toString(),
+        name: provider.provider_name,
+        logo: provider.provider_name.substring(0, 1),
+        logoPath: provider.logo_path,
+        thisMonthContent: [],
+        ...meta
+    } as Platform;
+};
 
 export default function DashboardPage() {
-    const preferences = useStore((state) => state.preferences);
-    const filters = useStore((state) => state.filters);
-    const toggleSubscription = useStore((state) => state.toggleSubscription);
-    const [userProfile, setUserProfile] = useState<TasteProfile | null>(null);
+    const setInterests = useStore((state) => state.setInterests);
+    const setTasteProfile = useStore((state) => state.setTasteProfile);
+    const tasteProfile = useStore((state) => state.tasteProfile);
+    const trackedProviders = useStore((state) => state.trackedProviders);
+
+    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Auto-open selector if no platforms selected
+    useEffect(() => {
+        if (!isLoadingProfile && trackedProviders.length === 0) {
+            const timer = setTimeout(() => setIsSelectorOpen(true), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isLoadingProfile, trackedProviders]);
 
     // Fetch user profile from Supabase
     useEffect(() => {
@@ -34,15 +74,19 @@ export default function DashboardPage() {
                         .single() as { data: { user_name: string | null; user_age: number | null; taste_profile: any } | null };
 
                     if (profile && profile.taste_profile) {
-                        const tasteProfile: TasteProfile = {
+                        const loadedProfile: TasteProfile = {
                             ...profile.taste_profile,
                             userName: profile.user_name,
                             userAge: profile.user_age
                         };
-                        setUserProfile(tasteProfile);
+                        setTasteProfile(loadedProfile);
+                        const interests = [
+                            ...(loadedProfile.genres || []),
+                            ...(loadedProfile.contentTypes || [])
+                        ];
+                        setInterests(interests);
 
-                        // Apply dynamic theme based on dominant genre
-                        const dominantGenre = tasteProfile.genres?.[0];
+                        const dominantGenre = loadedProfile.genres?.[0];
                         const themeVariant = getThemeVariant(dominantGenre);
                         applyThemeVariant(themeVariant);
                     }
@@ -55,155 +99,81 @@ export default function DashboardPage() {
         }
 
         fetchUserProfile();
-    }, []);
+    }, [setInterests, setTasteProfile]);
 
-    // Calculate scores for all platforms based on user interests
-    const platformScores = useMemo(() => {
-        return scoreAllPlatforms(platforms, preferences.interests);
-    }, [preferences.interests]);
+    const activePlatforms = useMemo(() => {
+        return trackedProviders.map(mapProviderToPlatform);
+    }, [trackedProviders]);
 
-    // Create a map for quick lookup
-    const scoreMap = useMemo(() => {
-        return new Map(platformScores.map((s) => [s.platformId, s]));
-    }, [platformScores]);
-
-    // Filter and sort platforms
     const filteredPlatforms = useMemo(() => {
-        let result = [...platforms];
-
-        // Apply search filter
-        if (filters.searchQuery) {
-            const query = filters.searchQuery.toLowerCase();
-            result = result.filter(
-                (p) =>
-                    p.name.toLowerCase().includes(query) ||
-                    p.thisMonthContent.some((c) => c.title.toLowerCase().includes(query))
-            );
-        }
-
-        // Apply verdict filter
-        if (filters.verdictFilter) {
-            result = result.filter((p) => {
-                const score = scoreMap.get(p.id);
-                return score?.verdict === filters.verdictFilter;
-            });
-        }
-
-        // Apply sorting
-        result.sort((a, b) => {
-            const scoreA = scoreMap.get(a.id);
-            const scoreB = scoreMap.get(b.id);
-            let comparison = 0;
-
-            switch (filters.sortBy) {
-                case 'score':
-                    comparison = (scoreB?.totalScore || 0) - (scoreA?.totalScore || 0);
-                    break;
-                case 'price':
-                    comparison = a.monthlyPrice - b.monthlyPrice;
-                    break;
-                case 'name':
-                    comparison = a.name.localeCompare(b.name);
-                    break;
-            }
-
-            return filters.sortOrder === 'asc' ? -comparison : comparison;
-        });
-
-        return result;
-    }, [platforms, filters, scoreMap]);
-
-    // Calculate savings stats
-    const savingsStats = useMemo(() => {
-        const totalSavings = calculateTotalSavings(platformScores);
-        const subscribedCount = preferences.subscribedPlatforms.length;
-        const skippedCount = platformScores.filter(
-            (s) => s.verdict === 'skip' || s.verdict === 'pause'
-        ).length;
-
-        return {
-            monthlySavings: totalSavings,
-            yearlySavings: totalSavings * 12,
-            subscribedCount,
-            skippedCount,
-        };
-    }, [platformScores, preferences.subscribedPlatforms]);
-
-    // Get current month name
-    const currentMonth = new Date().toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-    });
+        if (!searchQuery) return activePlatforms;
+        return activePlatforms.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }, [activePlatforms, searchQuery]);
 
     return (
-        <DashboardLayout>
-            <div className="max-w-7xl mx-auto">
-                {/* Personalized Greeting */}
-                {!isLoadingProfile && userProfile && (
-                    <PersonalizedGreeting profile={userProfile} />
-                )}
+        <DashboardLayout header={
+            !isLoadingProfile && tasteProfile ? <DashboardHeader profile={tasteProfile} /> : null
+        }>
+            <div className="min-h-screen pb-20">
+                {/* 1. Info Strip (Now top of content) */}
+                <InfoStrip />
 
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8"
-                >
-                    <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                        <span className="text-xs sm:text-sm text-foreground-muted">{currentMonth}</span>
-                    </div>
-                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">
-                        Your OTT Verdicts
-                    </h2>
-                    <p className="text-sm sm:text-base text-foreground-muted max-w-2xl">
-                        Based on your taste, here's what's worth your money this month.
-                    </p>
-                </motion.div>
+                {/* 2. Main Content Area */}
+                <div className="max-w-7xl mx-auto px-4 lg:px-6 pt-6">
 
-                {/* Savings tracker */}
-                <SavingsTracker {...savingsStats} />
-
-                {/* Filters */}
-                <Filters />
-
-                {/* Platform grid */}
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredPlatforms.map((platform) => {
-                        const score = scoreMap.get(platform.id);
-                        if (!score) return null;
-
-                        return (
-                            <OTTCard
-                                key={platform.id}
-                                platform={platform}
-                                score={score}
-                                isSubscribed={preferences.subscribedPlatforms.includes(
-                                    platform.id
-                                )}
-                                onToggleSubscription={() => toggleSubscription(platform.id)}
+                    {/* Filter / Search Bar */}
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-10">
+                        <div className="relative w-full md:w-96">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input
+                                type="text"
+                                placeholder="Search your platforms..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 transition-colors"
                             />
-                        );
-                    })}
+                        </div>
+
+                        <div className="flex gap-3 w-full md:w-auto">
+                            <button
+                                onClick={() => setIsSelectorOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm font-medium whitespace-nowrap"
+                            >
+                                <Settings className="w-4 h-4 text-gray-400" />
+                                Manage Platforms
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 4. Platform Preview Grid */}
+                    <div className="space-y-12">
+                        {filteredPlatforms.length > 0 ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-8">
+                                {filteredPlatforms.map(platform => (
+                                    <PlatformPreviewCard
+                                        key={platform.id}
+                                        platform={platform}
+                                        tmdbProviderId={parseInt(platform.id)}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                                <Filter className="w-8 h-8 text-gray-600 mx-auto mb-4" />
+                                <h3 className="text-lg font-semibold text-gray-300">No platforms found</h3>
+                                <p className="text-gray-500">Try adjusting your search or add more platforms.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Empty state */}
-                {filteredPlatforms.length === 0 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="text-center py-12 sm:py-16"
-                    >
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                            <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-                        </div>
-                        <h3 className="text-lg sm:text-xl font-semibold mb-2">No platforms match</h3>
-                        <p className="text-sm sm:text-base text-foreground-muted">
-                            Try adjusting your filters to see more platforms.
-                        </p>
-                    </motion.div>
-                )}
+                <PlatformSelector
+                    isOpen={isSelectorOpen}
+                    onClose={() => setIsSelectorOpen(false)}
+                    isInitialSetup={trackedProviders.length === 0}
+                />
             </div>
         </DashboardLayout>
     );
 }
+

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { TasteProfile } from '@/types/onboarding';
+import { WatchProvider } from '@/app/actions/tmdb';
 
 interface UserPreferences {
     interests: string[];
@@ -20,6 +22,14 @@ interface AppState {
     toggleInterest: (interest: string) => void;
     setSubscribedPlatforms: (platforms: string[]) => void;
     toggleSubscription: (platformId: string) => void;
+
+    // Tracked Providers (Real Data from TMDB)
+    trackedProviders: WatchProvider[];
+    setTrackedProviders: (providers: WatchProvider[]) => void;
+
+    // Full User Profile (Hydrated from DB)
+    tasteProfile: TasteProfile | null;
+    setTasteProfile: (profile: TasteProfile) => void;
 
     // Filter state
     filters: FilterState;
@@ -82,6 +92,14 @@ export const useStore = create<AppState>()(
                     },
                 })),
 
+            // Tracked Providers
+            trackedProviders: [],
+            setTrackedProviders: (providers) => set({ trackedProviders: providers }),
+
+            // Profile State
+            tasteProfile: null,
+            setTasteProfile: (profile) => set({ tasteProfile: profile }),
+
             // Filter state
             filters: defaultFilters,
 
@@ -119,9 +137,13 @@ export const useStore = create<AppState>()(
             partialize: (state) => ({
                 preferences: state.preferences,
                 savedTheme: state.savedTheme,
+                tasteProfile: state.tasteProfile,
+                trackedProviders: state.trackedProviders,
             }),
         }
     )
 );
 
 export default useStore;
+
+

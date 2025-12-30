@@ -23,6 +23,13 @@ interface TMDBResponse {
     total_pages: number;
 }
 
+export interface WatchProvider {
+    provider_id: number;
+    provider_name: string;
+    logo_path: string | null;
+    display_priority: number;
+}
+
 /**
  * Fetch data from TMDB API
  */
@@ -90,4 +97,56 @@ export async function searchTMDB(query: string): Promise<TMDBItem[]> {
     const data: TMDBResponse = await fetchTMDB('/search/multi', { query });
     // Filter out 'person' results
     return (data.results || []).filter(item => item.media_type === 'movie' || item.media_type === 'tv');
+}
+
+/**
+ * Get available OTT Providers (Watch Providers)
+ */
+export async function getWatchProviders(region = 'US'): Promise<WatchProvider[]> {
+    // We'll fetch movie providers as they are generally the same for TV
+    const data = await fetchTMDB('/watch/providers/movie', { watch_region: region });
+    return (data.results || [])
+        .sort((a: WatchProvider, b: WatchProvider) => a.display_priority - b.display_priority)
+        .slice(0, 50); // Top 50 providers
+}
+
+/**
+ * Get Trending/Popular Content for a specific Provider
+ * Uses discover endpoint
+ */
+export async function getContentByProvider(providerId: number, region = 'US'): Promise<{ movies: TMDBItem[], series: TMDBItem[] }> {
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+
+    const dateGte = thirtyDaysAgo.toISOString().split('T')[0];
+    const dateLte = today.toISOString().split('T')[0];
+
+    // Fetch movies
+    const moviesData = await fetchTMDB('/discover/movie', {
+        with_watch_providers: providerId.toString(),
+        watch_region: region,
+        sort_by: 'popularity.desc',
+        'primary_release_date.gte': dateGte,
+        'primary_release_date.lte': dateLte
+    });
+
+    // Fetch TV shows
+    const tvData = await fetchTMDB('/discover/tv', {
+        with_watch_providers: providerId.toString(),
+        watch_region: region,
+        sort_by: 'popularity.desc',
+        'first_air_date.gte': dateGte,
+        'first_air_date.lte': dateLte
+    });
+
+    const movies = (moviesData.results || [])
+        .map((m: any) => ({ ...m, media_type: 'movie' }))
+        .slice(0, 5);
+
+    const series = (tvData.results || [])
+        .map((s: any) => ({ ...s, media_type: 'tv' }))
+        .slice(0, 5);
+
+    return { movies, series };
 }
