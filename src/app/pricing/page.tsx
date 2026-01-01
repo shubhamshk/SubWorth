@@ -200,7 +200,7 @@ export default function PricingPage() {
                                             variant={plan.popular ? 'primary' : 'secondary'}
                                             className="w-full"
                                             glow={plan.popular}
-                                            onClick={() => handleProtectedClick('/dashboard')}
+                                            onClick={() => handleProtectedClick(`/payment?plan=${plan.id}`)}
                                         >
                                             {plan.cta}
                                         </Button>
@@ -257,7 +257,7 @@ export default function PricingPage() {
                             <p className="text-foreground-muted mb-8 px-4">
                                 Join thousands of smart streamers who are only paying for content worth watching.
                             </p>
-                            <Button size="lg" glow onClick={() => handleProtectedClick('/dashboard')}>
+                            <Button size="lg" glow onClick={() => handleProtectedClick('/payment?plan=pro')}>
                                 Start Subscription
                             </Button>
                         </motion.div>

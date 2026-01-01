@@ -2,178 +2,214 @@
 
 import { useMemo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Settings, Filter } from 'lucide-react';
+import { Settings, CreditCard, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import { Platform } from '@/data/platforms';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/lib/store';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { TasteProfile } from '@/types/onboarding';
-import { getThemeVariant, applyThemeVariant } from '@/lib/themeVariants';
-import PlatformSelector from '@/components/dashboard/PlatformSelector';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import InfoStrip from '@/components/dashboard/InfoStrip';
-import PlatformPreviewCard from '@/components/dashboard/PlatformPreviewCard';
-import { WatchProvider } from '@/app/actions/tmdb';
-
-// Helper to convert TMDB Provider to internal Platform shape
-const mapProviderToPlatform = (provider: WatchProvider): Platform => {
-    const knownMetadata: Record<number, Partial<Platform>> = {
-        8: { color: 'from-red-600 to-black', monthlyPrice: 15.49, currency: '$' }, // Netflix
-        119: { color: 'from-blue-500 to-cyan-400', monthlyPrice: 8.99, currency: '$' }, // Prime
-        337: { color: 'from-blue-900 to-white', monthlyPrice: 7.99, currency: '$' }, // Disney
-        15: { color: 'from-green-500 to-lime-400', monthlyPrice: 9.99, currency: '$' }, // Hulu
-        384: { color: 'from-purple-900 to-black', monthlyPrice: 9.99, currency: '$' }, // HBO Max
-    };
-
-    const meta = knownMetadata[provider.provider_id] || {
-        color: 'from-gray-700 to-gray-900',
-        monthlyPrice: 9.99,
-        currency: '$'
-    };
-
-    return {
-        id: provider.provider_id.toString(),
-        name: provider.provider_name,
-        logo: provider.provider_name.substring(0, 1),
-        logoPath: provider.logo_path,
-        thisMonthContent: [],
-        ...meta
-    } as Platform;
-};
+import { getLatestVerdict, MonthlyVerdict } from '@/app/actions/verdicts';
+import { getUserTrackedPlatforms } from '@/app/actions/platforms';
+import Link from 'next/link';
+import Image from 'next/image';
 
 export default function DashboardPage() {
-    const setInterests = useStore((state) => state.setInterests);
-    const setTasteProfile = useStore((state) => state.setTasteProfile);
-    const tasteProfile = useStore((state) => state.tasteProfile);
-    const trackedProviders = useStore((state) => state.trackedProviders);
+    const { profile, setProfile } = useStore();
+    const [verdict, setVerdict] = useState<MonthlyVerdict | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [trackedPlatforms, setTrackedPlatforms] = useState<any[]>([]);
 
-    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-    const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    // Auto-open selector if no platforms selected
     useEffect(() => {
-        if (!isLoadingProfile && trackedProviders.length === 0) {
-            const timer = setTimeout(() => setIsSelectorOpen(true), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [isLoadingProfile, trackedProviders]);
-
-    // Fetch user profile from Supabase
-    useEffect(() => {
-        async function fetchUserProfile() {
+        async function loadDashboardData() {
             try {
                 const supabase = getSupabaseClient();
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
-                    const { data: profile } = await supabase
+                    const { data: profileResult } = await supabase
                         .from('user_profiles')
-                        .select('user_name, user_age, taste_profile')
+                        .select('*')
                         .eq('id', user.id)
-                        .single() as { data: { user_name: string | null; user_age: number | null; taste_profile: any } | null };
+                        .single();
 
-                    if (profile && profile.taste_profile) {
-                        const loadedProfile: TasteProfile = {
-                            ...profile.taste_profile,
-                            userName: profile.user_name,
-                            userAge: profile.user_age
+                    const dbProfile = profileResult as any;
+
+                    if (dbProfile) {
+                        const loadedProfile = {
+                            ...profile,
+                            fullName: dbProfile.full_name || undefined,
+                            age: dbProfile.age || undefined,
+                            ...(dbProfile.taste_profile || {}),
+                            onboardingCompleted: dbProfile.onboarding_completed,
+                            plan: dbProfile.selected_plan,
                         };
-                        setTasteProfile(loadedProfile);
-                        const interests = [
-                            ...(loadedProfile.genres || []),
-                            ...(loadedProfile.contentTypes || [])
-                        ];
-                        setInterests(interests);
+                        if (!loadedProfile.selectedPlatforms) loadedProfile.selectedPlatforms = [];
+                        setProfile(loadedProfile);
+                    }
 
-                        const dominantGenre = loadedProfile.genres?.[0];
-                        const themeVariant = getThemeVariant(dominantGenre);
-                        applyThemeVariant(themeVariant);
+                    const verdictRes = await getLatestVerdict();
+                    if (verdictRes.success && verdictRes.data) {
+                        setVerdict(verdictRes.data);
+                    }
+
+                    const platformsRes = await getUserTrackedPlatforms();
+                    if (platformsRes.success && platformsRes.data) {
+                        setTrackedPlatforms(platformsRes.data);
                     }
                 }
             } catch (error) {
-                console.error('Error fetching user profile:', error);
+                console.error('Error loading dashboard:', error);
             } finally {
-                setIsLoadingProfile(false);
+                setIsLoading(false);
             }
         }
 
-        fetchUserProfile();
-    }, [setInterests, setTasteProfile]);
+        loadDashboardData();
+    }, [setProfile]);
 
-    const activePlatforms = useMemo(() => {
-        return trackedProviders.map(mapProviderToPlatform);
-    }, [trackedProviders]);
+    const myPlatforms = useMemo(() => trackedPlatforms, [trackedPlatforms]);
 
-    const filteredPlatforms = useMemo(() => {
-        if (!searchQuery) return activePlatforms;
-        return activePlatforms.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    }, [activePlatforms, searchQuery]);
+    const planName = profile.plan === 'team' ? 'Team Plan' : 'Pro Plan';
+    const planLimit = profile.plan === 'team' ? 50 : 5;
 
     return (
-        <DashboardLayout header={
-            !isLoadingProfile && tasteProfile ? <DashboardHeader profile={tasteProfile} /> : null
-        }>
-            <div className="min-h-screen pb-20">
-                {/* 1. Info Strip (Now top of content) */}
-                <InfoStrip />
+        <DashboardLayout header={<DashboardHeader profile={profile} />}>
+            <div className="min-h-screen pb-20 pt-6 px-4 lg:px-6 max-w-7xl mx-auto space-y-8">
 
-                {/* 2. Main Content Area */}
-                <div className="max-w-7xl mx-auto px-4 lg:px-6 pt-6">
+                {/* 1. Plan & Verdict Grid (Restored to Simpler Layout) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                    {/* Filter / Search Bar */}
-                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-10">
-                        <div className="relative w-full md:w-96">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Search your platforms..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                            />
+                    {/* Plan Status Card */}
+                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <CreditCard className="w-24 h-24" />
+                        </div>
+                        <h3 className="text-foreground-muted font-medium mb-2">Current Plan</h3>
+                        <div className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                            {planName}
+                            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full border border-primary/20">Active</span>
                         </div>
 
-                        <div className="flex gap-3 w-full md:w-auto">
-                            <button
-                                onClick={() => setIsSelectorOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm font-medium whitespace-nowrap"
-                            >
-                                <Settings className="w-4 h-4 text-gray-400" />
-                                Manage Platforms
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-foreground-muted">Tracking</span>
+                                <span className="text-white">{myPlatforms.length} / {planLimit} slots</span>
+                            </div>
+                            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-primary transition-all duration-500"
+                                    style={{ width: `${(myPlatforms.length / planLimit) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {myPlatforms.length >= planLimit && (
+                            <button className="mt-6 w-full py-2 rounded-xl border border-white/10 hover:bg-white/5 text-sm transition-colors text-white">
+                                Upgrade to Team
                             </button>
-                        </div>
+                        )}
                     </div>
 
-                    {/* 4. Platform Preview Grid */}
-                    <div className="space-y-12">
-                        {filteredPlatforms.length > 0 ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-8">
-                                {filteredPlatforms.map(platform => (
-                                    <PlatformPreviewCard
-                                        key={platform.id}
-                                        platform={platform}
-                                        tmdbProviderId={parseInt(platform.id)}
-                                    />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
-                                <Filter className="w-8 h-8 text-gray-600 mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-gray-300">No platforms found</h3>
-                                <p className="text-gray-500">Try adjusting your search or add more platforms.</p>
-                            </div>
-                        )}
+                    {/* Verdict Banner */}
+                    <div className="md:col-span-2 relative group overflow-hidden rounded-3xl">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/40 to-purple-900/40 opacity-80" />
+                        <div className="relative h-full border border-white/10 rounded-3xl p-6 flex flex-col justify-center">
+
+                            <h3 className="text-xl font-bold text-white mb-2 z-10 flex items-center gap-2">
+                                {verdict?.status === 'ready' ? "Verdict Ready" : "Analyzing..."}
+                                {verdict?.status === 'ready' && <Sparkles className="w-5 h-5 text-yellow-400" />}
+                            </h3>
+
+                            <p className="text-foreground-muted max-w-lg mb-6 z-10">
+                                {verdict?.status === 'ready'
+                                    ? "We've analyzed all your platforms. Check out what to watch, skip, or pause to save money this month."
+                                    : "Our team is curating the best picks for your taste profile."}
+                            </p>
+
+                            <Link
+                                href="/dashboard/verdict"
+                                className={`
+                                    w-fit px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all z-10
+                                    ${verdict?.status === 'ready'
+                                        ? 'bg-white text-black hover:bg-gray-100'
+                                        : 'bg-white/5 text-white/50 border border-white/5'}
+                                `}
+                            >
+                                {verdict?.status === 'ready' ? 'View Verdict' : 'In Progress'}
+                                {verdict?.status === 'ready' && <CheckCircle2 className="w-4 h-4" />}
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
-                <PlatformSelector
-                    isOpen={isSelectorOpen}
-                    onClose={() => setIsSelectorOpen(false)}
-                    isInitialSetup={trackedProviders.length === 0}
-                />
+                {/* 2. Tracked Platforms Grid (Enhanced UI as requested) */}
+                <div>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-white">Your Platforms</h2>
+                        <button className="text-sm text-foreground-muted hover:text-white transition-colors flex items-center gap-2">
+                            <Settings className="w-4 h-4" /> Manage
+                        </button>
+                    </div>
+
+                    {myPlatforms.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {myPlatforms.map((platform, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className="group relative"
+                                >
+                                    {/* Enhanced Glass Card UI */}
+                                    <div className="relative h-[100px] bg-[#121212] border border-white/10 rounded-2xl p-4 flex items-center gap-4 overflow-hidden transition-all duration-300 hover:border-white/20 hover:scale-[1.02] hover:shadow-2xl hover:shadow-primary/5">
+
+                                        {/* Logo Box with Gradient Glow */}
+                                        <div className={`
+                                            relative w-16 h-16 rounded-xl flex items-center justify-center shrink-0 
+                                            bg-gradient-to-br ${platform.color || 'from-gray-700 to-gray-800'} 
+                                            text-white shadow-lg overflow-hidden group-hover:shadow-primary/20 transition-all
+                                        `}>
+                                            {typeof platform.logo === 'string' && platform.logo.startsWith('http') ? (
+                                                <Image src={platform.logo} alt={platform.name} width={64} height={64} className="object-cover w-full h-full" />
+                                            ) : (
+                                                <span className="text-xl font-bold relative z-10">{platform.logo}</span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-lg text-white group-hover:text-primary transition-colors truncate">
+                                                {platform.name}
+                                            </h4>
+                                            <div className="flex items-center gap-1.5 mt-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                                                <span className="text-xs text-green-400/90 font-medium">Tracking Active</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Subtle Gloss Overlay on Hover */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                                    </div>
+                                </motion.div>
+                            ))}
+
+                            {/* Connect Button */}
+                            <Link href="/onboarding?step=platforms" className="h-[100px] border border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 text-foreground-muted hover:text-white hover:bg-white/5 transition-all group">
+                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Zap className="w-4 h-4" />
+                                </div>
+                                <span className="text-sm font-medium">Connect Platform</span>
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                            <h3 className="text-lg font-semibold text-gray-300">No platforms connected</h3>
+                            <p className="text-gray-500 mb-6">Connect your subscriptions to get started.</p>
+                            <Link href="/onboarding?step=platforms" className="text-primary hover:underline">Go to settings</Link>
+                        </div>
+                    )}
+                </div>
+
             </div>
         </DashboardLayout>
     );
 }
-

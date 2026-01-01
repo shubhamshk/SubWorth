@@ -46,7 +46,7 @@ export default function DashboardHeader({ profile }: DashboardHeaderProps) {
         <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-bold text-white truncate">
-                    {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">{profile.userName}</span>
+                    {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">{profile.fullName}</span>
                 </h1>
             </div>
             <p className="text-xs md:text-sm text-foreground-muted flex items-center gap-1.5 truncate">

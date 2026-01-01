@@ -36,9 +36,9 @@ export async function GET(request: Request) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            // Redirect to dashboard - Middleware will handle proper routing
-            // based on onboarding_completed status
-            return NextResponse.redirect(`${origin}/dashboard`);
+            // Redirect to /payment - Middleware will strictly enforce payment status
+            // If already paid, middleware will redirect to dashboard
+            return NextResponse.redirect(`${origin}/payment`);
         }
     }
 

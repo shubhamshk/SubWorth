@@ -20,7 +20,8 @@ import { useState } from 'react';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { verifyAndRecordPayment } from '@/app/actions/payment';
 import { Check, Shield } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!;
 
@@ -50,9 +51,20 @@ const PLANS = [
 ];
 
 export default function PaymentPage() {
-    const router = useRouter();
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>}>
+            <PaymentContent />
+        </Suspense>
+    );
+}
 
-    const [selectedPlan, setSelectedPlan] = useState<'pro' | 'team'>('pro');
+function PaymentContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const planParam = searchParams.get('plan');
+    const initialPlan = (planParam === 'team' || planParam === 'pro') ? planParam : 'pro';
+
+    const [selectedPlan, setSelectedPlan] = useState<'pro' | 'team'>(initialPlan);
     const [error, setError] = useState<string | null>(null);
     const [isPaying, setIsPaying] = useState(false);
 

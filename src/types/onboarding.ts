@@ -25,25 +25,29 @@ export interface FavoriteShow {
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
 
 export interface TasteProfile {
-    userName: string | null;
-    userAge: number | null;
+    fullName: string | null;
+    age: number | null;
     contentTypes: ContentType[];
     genres: Genre[];
     languages: Language[];
     favoriteShows: FavoriteShow[];
+    selectedPlatforms: string[]; // IDs of selected platforms
     behavior: WatchBehavior | null;
     confidence: ConfidenceLevel;
     onboardingCompleted: boolean;
+    plan?: 'pro' | 'team' | null;
 }
 
 export const INITIAL_PROFILE: TasteProfile = {
-    userName: null,
-    userAge: null,
+    fullName: null,
+    age: null,
     contentTypes: [],
     genres: [],
     languages: [],
     favoriteShows: [],
+    selectedPlatforms: [],
     behavior: null,
     confidence: 'low',
-    onboardingCompleted: false
+    onboardingCompleted: false,
+    plan: null
 };

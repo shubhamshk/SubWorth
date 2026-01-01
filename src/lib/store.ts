@@ -21,6 +21,7 @@ export const useStore = create<UserState>((set, get) => ({
 
         if (profile.contentTypes.length > 0) score++;
         if (profile.genres.length >= 3) score++;
+        if (profile.selectedPlatforms.length >= 1) score++;
         if (profile.favoriteShows.length >= 3) score++;
         if (profile.behavior) score++;
 

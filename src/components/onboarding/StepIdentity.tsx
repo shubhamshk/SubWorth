@@ -6,16 +6,16 @@ import { useStore } from '@/lib/store';
 
 export default function StepIdentity() {
     const { profile, setProfile } = useStore();
-    const [name, setName] = useState(profile.userName || '');
-    const [age, setAge] = useState(profile.userAge?.toString() || '');
+    const [name, setName] = useState(profile.fullName || '');
+    const [age, setAge] = useState(profile.age?.toString() || '');
     const [errors, setErrors] = useState({ name: '', age: '' });
 
     // Update store when values change
     useEffect(() => {
         const ageNum = age ? parseInt(age, 10) : null;
         setProfile({
-            userName: name.trim() || null,
-            userAge: ageNum
+            fullName: name.trim() || null,
+            age: ageNum
         });
     }, [name, age, setProfile]);
 

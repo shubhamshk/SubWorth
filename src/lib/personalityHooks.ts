@@ -113,9 +113,9 @@ export function generatePersonalityHook(profile: TasteProfile): PersonalityHook 
 /**
  * Get a personalized greeting based on time of day and user name
  */
-export function getPersonalizedGreeting(userName: string | null): string {
+export function getPersonalizedGreeting(fullName: string | null): string {
     const hour = new Date().getHours();
-    const name = userName || 'there';
+    const name = fullName || 'there';
 
     if (hour < 12) {
         return `Good morning, ${name}`;

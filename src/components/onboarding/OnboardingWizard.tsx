@@ -12,15 +12,18 @@ import {
     StepLanguages,
     StepFavorites,
     StepBehavior,
+    StepOTTPlatforms,
     AIAnalysisLoader
 } from './';
 import { useRouter } from 'next/navigation';
+import { syncSelectedPlatforms } from '@/app/actions/platforms'; // Import server action
 
 const STEPS = [
     { id: 'identity', title: 'Welcome' },
     { id: 'content', title: 'Content Preference' },
     { id: 'genres', title: 'Your Taste' },
     { id: 'languages', title: 'Languages' },
+    { id: 'platforms', title: 'Calculated For' },
     { id: 'favorites', title: 'Favorite Shows' },
     { id: 'behavior', title: 'Watch Habits' },
 ];
@@ -80,22 +83,41 @@ export default function OnboardingWizard() {
 
                 if (user) {
                     console.log('👤 User ID:', user.id);
+
+                    // 1. Sync Platforms (Resolve TMDB IDs to DB UUIDs)
+                    let finalPlatformIds = profile.selectedPlatforms || [];
+
+                    try {
+                        if (finalPlatformIds.length > 0) {
+                            console.log('🔄 Syncing platforms to database...');
+                            const syncRes = await syncSelectedPlatforms(finalPlatformIds);
+                            if (syncRes.success && syncRes.data) {
+                                finalPlatformIds = syncRes.data;
+                                console.log('✅ Platforms synced. Resolved UUIDs:', finalPlatformIds.length);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('⚠️ Sync failed, proceeding with original IDs:', e);
+                    }
+
                     console.log('📊 Profile data:', {
-                        userName: profile.userName,
-                        userAge: profile.userAge,
+                        fullName: profile.fullName,
+                        age: profile.age,
                         contentTypes: profile.contentTypes,
-                        genres: profile.genres
+                        genres: profile.genres,
+                        platforms: finalPlatformIds
                     });
 
-                    // Save taste profile and mark onboarding as completed
-                    // Using UPSERT: inserts if row doesn't exist, updates if it does
+                    // Save taste profile (with Updated UUIDs for platforms)
+                    const updatedProfile = { ...profile, selectedPlatforms: finalPlatformIds };
+
                     const { error } = await (supabase
                         .from('user_profiles') as any)
                         .upsert({
                             id: user.id,
-                            user_name: profile.userName,
-                            user_age: profile.userAge,
-                            taste_profile: profile,
+                            full_name: profile.fullName,
+                            age: profile.age,
+                            taste_profile: updatedProfile,
                             onboarding_completed: true,
                             updated_at: new Date().toISOString()
                         }, {
@@ -104,19 +126,35 @@ export default function OnboardingWizard() {
 
                     if (error) {
                         console.error('❌ Supabase upsert error:', error);
-                        // Still proceed to show loader - don't block the user
                     } else {
                         console.log('✅ Profile saved successfully!');
+
+                        // Sync to Relational Table: user_tracked_platforms
+                        const { error: deleteError } = await supabase
+                            .from('user_tracked_platforms')
+                            .delete()
+                            .eq('user_id', user.id);
+
+                        if (!deleteError && finalPlatformIds.length > 0) {
+                            const platformRows = finalPlatformIds.map(key => ({
+                                user_id: user.id,
+                                platform_key: key
+                            }));
+
+                            const { error: insertError } = await (supabase
+                                .from('user_tracked_platforms') as any)
+                                .insert(platformRows);
+
+                            if (insertError) console.error('❌ Failed to sync tracked platforms:', insertError);
+                            else console.log('✅ Tracked platforms synced to relational DB');
+                        }
                     }
 
                     // Increased delay to ensure database write completes
-                    console.log('⏳ Waiting for database write to complete...');
                     await new Promise(resolve => setTimeout(resolve, 1000));
-                    console.log('✅ Database write should be complete');
                 }
             } catch (error) {
                 console.error('❌ Failed to save profile:', error);
-                // Still proceed to show loader - don't block the user
             } finally {
                 setIsSubmitting(false);
             }
@@ -180,8 +218,9 @@ export default function OnboardingWizard() {
                                 {currentStep === 1 && <StepContentType />}
                                 {currentStep === 2 && <StepGenres />}
                                 {currentStep === 3 && <StepLanguages />}
-                                {currentStep === 4 && <StepFavorites />}
-                                {currentStep === 5 && <StepBehavior />}
+                                {currentStep === 4 && <StepOTTPlatforms />}
+                                {currentStep === 5 && <StepFavorites />}
+                                {currentStep === 6 && <StepBehavior />}
                             </motion.div>
                         </AnimatePresence>
                     </div>

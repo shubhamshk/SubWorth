@@ -17,7 +17,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Stores user profile and preferences
 -- SECURITY: One row per authenticated user, linked to auth.users
 -- ============================================================================
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     -- SECURITY: Foreign key to Supabase Auth - ensures only authenticated users exist
     auth_id UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -35,16 +35,16 @@ CREATE TABLE public.users (
 );
 
 -- Index for fast auth_id lookups (used in every RLS policy)
-CREATE INDEX idx_users_auth_id ON public.users(auth_id);
+CREATE INDEX IF NOT EXISTS idx_users_auth_id ON public.users(auth_id);
 -- Index for unsubscribe token lookups
-CREATE INDEX idx_users_unsubscribe_token ON public.users(unsubscribe_token);
+CREATE INDEX IF NOT EXISTS idx_users_unsubscribe_token ON public.users(unsubscribe_token);
 
 -- ============================================================================
 -- OTT_PLATFORMS TABLE
 -- Master list of OTT platforms (Netflix, Prime, etc.)
 -- SECURITY: Admin-only write access, public read
 -- ============================================================================
-CREATE TABLE public.ott_platforms (
+CREATE TABLE IF NOT EXISTS public.ott_platforms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
@@ -68,16 +68,16 @@ CREATE TABLE public.ott_platforms (
 );
 
 -- Index for slug lookups
-CREATE INDEX idx_ott_platforms_slug ON public.ott_platforms(slug);
+CREATE INDEX IF NOT EXISTS idx_ott_platforms_slug ON public.ott_platforms(slug);
 -- Index for active platforms
-CREATE INDEX idx_ott_platforms_active ON public.ott_platforms(is_active) WHERE is_active = true;
+-- CREATE INDEX IF NOT EXISTS idx_ott_platforms_active ON public.ott_platforms(is_active) WHERE is_active = true;
 
 -- ============================================================================
 -- MONTHLY_RELEASES TABLE
 -- Content releasing this month on each platform
 -- SECURITY: Admin-only write access, public read
 -- ============================================================================
-CREATE TABLE public.monthly_releases (
+CREATE TABLE IF NOT EXISTS public.monthly_releases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -97,16 +97,16 @@ CREATE TABLE public.monthly_releases (
 );
 
 -- Composite index for month/year queries
-CREATE INDEX idx_monthly_releases_period ON public.monthly_releases(release_year, release_month);
+CREATE INDEX IF NOT EXISTS idx_monthly_releases_period ON public.monthly_releases(release_year, release_month);
 -- Index for platform lookups
-CREATE INDEX idx_monthly_releases_platform ON public.monthly_releases(platform_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_releases_platform ON public.monthly_releases(platform_id);
 
 -- ============================================================================
 -- USER_INTERESTS TABLE
 -- User's content preferences/interests
 -- SECURITY: User can only access their own interests
 -- ============================================================================
-CREATE TABLE public.user_interests (
+CREATE TABLE IF NOT EXISTS public.user_interests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     interest TEXT NOT NULL,
@@ -117,14 +117,14 @@ CREATE TABLE public.user_interests (
 );
 
 -- Index for user lookups
-CREATE INDEX idx_user_interests_user ON public.user_interests(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_interests_user ON public.user_interests(user_id);
 
 -- ============================================================================
 -- USER_SUBSCRIPTIONS TABLE  
 -- Which platforms the user is currently subscribed to
 -- SECURITY: User can only access their own subscriptions
 -- ============================================================================
-CREATE TABLE public.user_subscriptions (
+CREATE TABLE IF NOT EXISTS public.user_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
@@ -138,16 +138,16 @@ CREATE TABLE public.user_subscriptions (
 );
 
 -- Index for user lookups
-CREATE INDEX idx_user_subscriptions_user ON public.user_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user ON public.user_subscriptions(user_id);
 -- Index for active subscriptions
-CREATE INDEX idx_user_subscriptions_active ON public.user_subscriptions(user_id, is_active) WHERE is_active = true;
+-- CREATE INDEX IF NOT EXISTS idx_user_subscriptions_active ON public.user_subscriptions(user_id, is_active) WHERE is_active = true;
 
 -- ============================================================================
 -- USER_VERDICTS TABLE
 -- Calculated verdicts for each user/platform combination
 -- SECURITY: System-generated, user can only read their own
 -- ============================================================================
-CREATE TABLE public.user_verdicts (
+CREATE TABLE IF NOT EXISTS public.user_verdicts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     platform_id UUID NOT NULL REFERENCES public.ott_platforms(id) ON DELETE CASCADE,
@@ -173,16 +173,16 @@ CREATE TABLE public.user_verdicts (
 );
 
 -- Index for user lookups
-CREATE INDEX idx_user_verdicts_user ON public.user_verdicts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_verdicts_user ON public.user_verdicts(user_id);
 -- Index for current month verdicts
-CREATE INDEX idx_user_verdicts_period ON public.user_verdicts(verdict_year, verdict_month);
+-- CREATE INDEX IF NOT EXISTS idx_user_verdicts_period ON public.user_verdicts(verdict_year, verdict_month);
 
 -- ============================================================================
 -- NOTIFICATION_LOG TABLE
 -- Tracks sent notifications to prevent spam
 -- SECURITY: System-managed, user can view their own
 -- ============================================================================
-CREATE TABLE public.notification_log (
+CREATE TABLE IF NOT EXISTS public.notification_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     notification_type TEXT NOT NULL CHECK (notification_type IN ('verdict_update', 'monthly_summary', 'special_offer')),
@@ -195,14 +195,14 @@ CREATE TABLE public.notification_log (
 );
 
 -- Index for user + type lookups (rate limiting)
-CREATE INDEX idx_notification_log_user_type ON public.notification_log(user_id, notification_type, sent_at);
+CREATE INDEX IF NOT EXISTS idx_notification_log_user_type ON public.notification_log(user_id, notification_type, sent_at);
 
 -- ============================================================================
 -- RATE_LIMIT_LOG TABLE
 -- Server-side rate limiting tracking
 -- SECURITY: Used by edge functions to prevent abuse
 -- ============================================================================
-CREATE TABLE public.rate_limit_log (
+CREATE TABLE IF NOT EXISTS public.rate_limit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     -- Can be user_id, IP, or other identifier
     identifier TEXT NOT NULL,
@@ -213,9 +213,9 @@ CREATE TABLE public.rate_limit_log (
 );
 
 -- Index for rate limit checks
-CREATE INDEX idx_rate_limit_log_lookup ON public.rate_limit_log(identifier, action, attempted_at);
--- Partial index for cleanup
-CREATE INDEX idx_rate_limit_log_expired ON public.rate_limit_log(expires_at) WHERE expires_at < NOW();
+CREATE INDEX IF NOT EXISTS idx_rate_limit_log_lookup ON public.rate_limit_log(identifier, action, attempted_at);
+-- Index for cleanup queries (removed partial index with NOW() - not allowed in PostgreSQL)
+CREATE INDEX IF NOT EXISTS idx_rate_limit_log_expires ON public.rate_limit_log(expires_at);
 
 -- ============================================================================
 -- UPDATED_AT TRIGGER FUNCTION

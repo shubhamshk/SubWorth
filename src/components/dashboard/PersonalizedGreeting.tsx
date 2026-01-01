@@ -10,7 +10,7 @@ interface PersonalizedGreetingProps {
 }
 
 export default function PersonalizedGreeting({ profile }: PersonalizedGreetingProps) {
-    const greeting = getPersonalizedGreeting(profile.userName);
+    const greeting = getPersonalizedGreeting(profile.fullName);
     const personalityHook = generatePersonalityHook(profile);
 
     return (

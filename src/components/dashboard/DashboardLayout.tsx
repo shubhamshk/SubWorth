@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
+import { useStore } from '@/lib/store';
 
 interface DashboardLayoutProps {
     children: React.ReactNode;
@@ -10,11 +11,22 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ children, header }: DashboardLayoutProps) {
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const { profile } = useStore();
+
+    // Capitalize first letter
+    const planName = profile.plan ? (profile.plan.charAt(0).toUpperCase() + profile.plan.slice(1) + ' Plan') : 'Pro Plan';
 
     return (
-        <div className="flex h-screen bg-background overflow-hidden">
+        <div className="flex h-screen bg-[#0a0a0a] overflow-hidden selection:bg-primary/20 selection:text-primary relative">
+            {/* Background Gradients/Mesh */}
+            <div className="fixed inset-0 z-0 pointer-events-none">
+                <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-900/20 blur-[120px]" />
+                <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-900/20 blur-[120px]" />
+                <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] rounded-full bg-primary/10 blur-[100px]" />
+            </div>
+
             {/* Mobile Sidebar Overlay */}
             {mobileOpen && (
                 <div
@@ -66,7 +78,7 @@ export default function DashboardLayout({ children, header }: DashboardLayoutPro
                             <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-purple-600 rounded-lg blur opacity-40 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
                             <div className="relative flex items-center px-4 py-1.5 bg-black rounded-lg border border-white/10 leading-none">
                                 <span className="text-xs font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-transparent bg-clip-text uppercase tracking-widest">
-                                    Pro Plan
+                                    {planName}
                                 </span>
                             </div>
                         </div>
